@@ -11,6 +11,12 @@ import * as fs from "node:fs";
 
 let serverInstance: Server | null = null;
 
+// Set up uploads directory
+const uploadsDir = getUploadsDir();
+if (!fs.existsSync(uploadsDir)) {
+  fs.mkdirSync(uploadsDir, { recursive: true });
+}
+
 export function startServer(port: number): Server {
   
   const app = express();
@@ -22,16 +28,18 @@ export function startServer(port: number): Server {
   app.get('/api/hello', (req, res) => {
     res.json({ message: 'Hello from the server!' });
   });
-
-  // Another sample route
-  app.get('/api/data', (req, res) => {
-    res.json({
-      items: [
-        { id: 1, name: 'Item 1' },
-        { id: 2, name: 'Item 2' },
-        { id: 3, name: 'Item 3' }
-      ]
-    });
+  
+  app.get('/api/files', (req, res) => {
+    try {
+      const files = fs.readdirSync(uploadsDir).map(fileName => ({
+        name: fileName,
+        path: path.join(uploadsDir, fileName),
+        size: fs.statSync(path.join(uploadsDir, fileName)).size
+      }));
+      res.json({ files: files });
+    } catch (error) {
+      res.status(500).json({ error: 'Could not read upload directory' });
+    }
   });
 
   const mcpServer = new McpServer({
@@ -67,12 +75,6 @@ export function startServer(port: number): Server {
       res.status(500).json({ error: "SSE transport not initialized" });
     }
   });
-
-  // Set up uploads directory
-  const uploadsDir = getUploadsDir();
-  if (!fs.existsSync(uploadsDir)) {
-    fs.mkdirSync(uploadsDir, { recursive: true });
-  }
 
   // File upload endpoint that handles direct file data instead of using multer
   app.post('/upload', async (req, res) => {

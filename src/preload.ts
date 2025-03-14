@@ -12,8 +12,10 @@ if (contextBridge && ipcRenderer) {
       return ipcRenderer.invoke('server-request', endpoint, data);
     },
 
-    // MCP server communication
-    mcpRequest: (message: any) => ipcRenderer.invoke('mcp-request', message)
+    openFile: (filename: string) => {
+      console.log(`Preload: openFile ${filename}`);
+      return ipcRenderer.invoke('open-file', filename);
+    }
   });
 } else {
   console.error('Electron APIs not available in preload script');

@@ -1,16 +1,15 @@
-import { app, BrowserWindow, ipcMain } from 'electron';
+import {app, BrowserWindow, dialog, ipcMain} from 'electron';
 import * as path from 'path';
-import { startServer } from './server';
-import {McpServer} from "@modelcontextprotocol/sdk/server/mcp.js";
+import {startServer} from './server';
 import {Server} from "http";
-import { getUploadsDir } from './utils/paths';
+import {getUploadsDir} from './utils/paths';
 
 let appServer: Server | null;
 
 let mainWindow: BrowserWindow | null = null;
 const PORT = 3000;
 
-function createWindow() {
+function createMainWindow() {
   // Create the browser window
   mainWindow = new BrowserWindow({
     width: 800,
@@ -31,17 +30,30 @@ function createWindow() {
   }
 }
 
+function createNewWindow(filePath: string) {
+  const newWin = new BrowserWindow({
+    width: 800,
+    height: 600,
+    webPreferences: {
+      nodeIntegration: false,
+      contextIsolation: true,
+    },
+  });
+
+  // Assuming filePath points to an HTML file that bootstraps the React UI
+  newWin.loadFile(filePath);
+}
 
 // When Electron has finished initialization, create window
 app.whenReady().then(() => {
   console.log('Uploads directory:', getUploadsDir());
   appServer = startServer(PORT);
   
-  createWindow();
+  createMainWindow();
 
   app.on('activate', function () {
     // On macOS it's common to re-create a window when the dock icon is clicked
-    if (BrowserWindow.getAllWindows().length === 0) createWindow();
+    if (BrowserWindow.getAllWindows().length === 0) createMainWindow();
   });
 });
 
@@ -54,6 +66,17 @@ app.on('quit', () => {
   if (appServer) {
     appServer.close();
   }
+});
+
+ipcMain.handle('open-file', async (_, selectedFile: string) => {
+  const uploadsDir = getUploadsDir();
+  console.log('Selected file:', selectedFile);
+  if (!selectedFile.startsWith(uploadsDir)) {
+    console.warn('Selected file is not in uploadsDir');
+    return null;
+  }
+  createNewWindow(selectedFile);
+  return selectedFile;
 });
 
 // Handle IPC requests from renderer to server
@@ -105,4 +128,3 @@ ipcMain.handle('server-request', async (_, endpoint, data) => {
     throw error;
   }
 });
-

@@ -1,119 +1,47 @@
 import React, {useEffect, useState} from 'react';
 
+
 // Declare the API interface available from preload script
 declare global {
     interface Window {
         api: {
             serverRequest: (endpoint: string, data?: any) => Promise<any>;
-            mcpRequest: (message: any) => Promise<any>;
+            openFile: (windowName: string) => Promise<any>;
         };
     }
 }
 
-interface DataItem {
-    id: number;
+interface FileItem {
     name: string;
-}
-
-interface ServerData {
-    items: DataItem[];
+    path: string;
+    size: number;
 }
 
 const App: React.FC = () => {
-    const [message, setMessage] = useState<string>('');
-    const [items, setItems] = useState<DataItem[]>([]);
+    const [files, setFiles] = useState<FileItem[]>([]);
     const [loading, setLoading] = useState<boolean>(true);
-    const [mcpResult, setMcpResult] = useState<string>('');
-    const [mcpLoading, setMcpLoading] = useState<boolean>(false);
-    const [name, setName] = useState<string>('');
-    const [num1, setNum1] = useState<number>(0);
-    const [num2, setNum2] = useState<number>(0);
     const [uploadStatus, setUploadStatus] = useState<string>('');
 
     useEffect(() => {
-        // Fetch hello message from server
-        const fetchMessage = async () => {
-            try {
-                const response = await window.api.serverRequest('/api/hello');
-                setMessage(response.message);
-            } catch (error) {
-                console.error('Error fetching message:', error);
-                setMessage('Failed to connect to server');
-            }
-        };
 
-        // Fetch data from server
-        const fetchData = async () => {
+        const fetchFiles = async () => {
             try {
-                const response: ServerData = await window.api.serverRequest('/api/data');
-                setItems(response.items);
+                const response = await window.api.serverRequest('/api/files');
+                setFiles(response.files);
             } catch (error) {
-                console.error('Error fetching data:', error);
+                console.error('Error fetching files:', error);
             } finally {
                 setLoading(false);
             }
         };
-
-        fetchMessage();
-        fetchData();
+        
+        fetchFiles();
     }, []);
 
-    // MCP greeting handler
-    const handleGreeting = async () => {
-        if (!name) return;
-
-        setMcpLoading(true);
-        try {
-            // Format the MCP request for the greeting resource
-            const message = {
-                jsonrpc: "2.0",
-                method: "getResource",
-                params: {
-                    uri: `greeting://${name}`
-                },
-                id: 1
-            };
-
-            const response = await window.api.mcpRequest(message);
-            if (response.result && response.result.contents && response.result.contents[0]) {
-                setMcpResult(response.result.contents[0].text);
-            } else {
-                setMcpResult('No greeting received');
-            }
-        } catch (error) {
-            console.error('Error with MCP greeting:', error);
-            setMcpResult('Error communicating with MCP server');
-        } finally {
-            setMcpLoading(false);
-        }
-    };
-
-    // MCP add handler
-    const handleAdd = async () => {
-        setMcpLoading(true);
-        try {
-            // Format the MCP request for the add tool
-            const message = {
-                jsonrpc: "2.0",
-                method: "executeTool",
-                params: {
-                    name: "add",
-                    parameters: {a: num1, b: num2}
-                },
-                id: 2
-            };
-
-            const response = await window.api.mcpRequest(message);
-            if (response.result && response.result.content && response.result.content[0]) {
-                setMcpResult(response.result.content[0].text);
-            } else {
-                setMcpResult('No result received');
-            }
-        } catch (error) {
-            console.error('Error with MCP add:', error);
-            setMcpResult('Error communicating with MCP server');
-        } finally {
-            setMcpLoading(false);
+    const handleOpenFile = async (selectedFile: string) => {
+        const filePath = await window.api.openFile(selectedFile);
+        if (filePath) {
+            console.log('Opened file:', filePath);
         }
     };
 
@@ -160,16 +88,18 @@ const App: React.FC = () => {
             <h1>Electron Server with MCP</h1>
 
             <div style={{marginBottom: '20px'}}>
-                <h2>Express Server Data</h2>
-                <p>Server message: {message}</p>
-
-                <h3>Data from Server:</h3>
+                <h3>Files:</h3>
                 {loading ? (
-                    <p>Loading data...</p>
+                    <p>Loading files...</p>
                 ) : (
                     <ul>
-                        {items.map(item => (
-                            <li key={item.id}>{item.name}</li>
+                        {files.map(file => (
+                            <li key={file.name}>
+                                {file.name} - {file.path}
+                                <button onClick={() => handleOpenFile(file.path)} style={{ marginLeft: '10px' }}>
+                                    Load File
+                                </button>
+                            </li>
                         ))}
                     </ul>
                 )}
