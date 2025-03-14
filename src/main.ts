@@ -1,4 +1,5 @@
-import {app, BrowserWindow, dialog, ipcMain} from 'electron';
+import {app, BrowserWindow, dialog, ipcMain, protocol} from 'electron';
+import * as fs from 'fs';
 import * as path from 'path';
 import {startServer} from './server';
 import {Server} from "http";
@@ -10,121 +11,238 @@ let mainWindow: BrowserWindow | null = null;
 const PORT = 3000;
 
 function createMainWindow() {
-  // Create the browser window
-  mainWindow = new BrowserWindow({
-    width: 800,
-    height: 600,
-    webPreferences: {
-      preload: path.join(__dirname, 'preload.js'),
-      nodeIntegration: false,
-      contextIsolation: true,
-    },
-  });
+    // Create the browser window
+    mainWindow = new BrowserWindow({
+        width: 800,
+        height: 600,
+        webPreferences: {
+            preload: path.join(__dirname, 'preload.js'),
+            nodeIntegration: false,
+            contextIsolation: true,
+        },
+    });
 
-  // Load the index.html from the renderer folder
-  mainWindow.loadFile(path.join(__dirname, 'renderer/index.html'));
+    // Load the index.html from the renderer folder
+    mainWindow.loadFile(path.join(__dirname, 'renderer/index.html'));
 
-  // Open DevTools in development mode
-  if (process.env.NODE_ENV === 'development') {
-    mainWindow.webContents.openDevTools();
-  }
+    // Open DevTools in development mode
+    if (process.env.NODE_ENV === 'development') {
+        mainWindow.webContents.openDevTools();
+    }
 }
 
 function createNewWindow(filePath: string) {
-  const newWin = new BrowserWindow({
-    width: 800,
-    height: 600,
-    webPreferences: {
-      nodeIntegration: false,
-      contextIsolation: true,
-    },
-  });
+    const newWin = new BrowserWindow({
+        width: 800,
+        height: 600,
+        webPreferences: {
+            nodeIntegration: false,
+            contextIsolation: true,
+        },
+    });
 
-  // Assuming filePath points to an HTML file that bootstraps the React UI
-  newWin.loadFile(filePath);
+    // Assuming filePath points to an HTML file that bootstraps the React UI
+    newWin.loadFile(filePath);
+}
+
+// In the createNewWindowWithTSX function, update the asset URLs to use the custom protocol:
+function createNewWindowWithTSX(tsxFilePath: string) {
+    // Read the TSX file
+    const tsxCode = fs.readFileSync(tsxFilePath, 'utf-8');
+
+    const filename = path.basename(tsxFilePath);
+
+    // Reference local assets via the custom protocol
+    const babelURL = 'app-assets://babel.min.js';
+    const reactURL = 'app-assets://react.development.js';
+    const reactDomURL = 'app-assets://react-dom.development.js';
+
+    // Create an HTML template that loads local React, Babel, and then compiles our TSX code.
+    const htmlContent = `
+  <!DOCTYPE html>
+  <html>
+    <head>
+      <meta charset="utf-8" />
+      <title>${filename}</title>
+      <!-- Load local React and ReactDOM -->
+      <script src="${reactURL}"></script>
+      <script src="${reactDomURL}"></script>
+      <!-- Load local Babel Standalone -->
+      <script src="${babelURL}"></script>
+    </head>
+    <body>
+      <div id="root"></div>
+      <!-- Embed the TSX code in a script that Babel will compile -->
+      <script id="module-code" type="text/plain">
+      ${tsxCode}
+      </script>
+      
+      <script>
+      // Get the inline TSX code
+      const sourceCode = document.getElementById('module-code').textContent;
+
+      // Transform the code using Babel. We use the presets for React and TypeScript.
+      const { code } = Babel.transform(sourceCode, {
+          filename: '${filename}', // Provide a filename for Babel to resolve parsing correctly.
+          presets: [
+            ['env', { modules: 'commonjs' }], // Transforms ES modules to CommonJS.
+            'react',
+            'typescript'
+          ]
+        });
+
+        // Create a require function that returns React when asked for it.
+        const requireFn = (moduleName) => {
+          if (moduleName === 'react') return React;
+          throw new Error("Module not found: " + moduleName);
+        };
+        
+        const module = { exports: {} };
+        const exports = module.exports;
+        
+        new Function("require", "module", "exports", code)(requireFn, module, exports);
+
+      // If there is a default export, use it; otherwise, pick the first export.
+      const Component =
+        module.exports.default ||
+        Object.values(module.exports)[0];
+
+      if (!Component) {
+        console.error("No component was found in the module exports.");
+      } else {
+        // Render the component into the #root element.
+        ReactDOM.render(
+          React.createElement(Component),
+          document.getElementById("root")
+        );
+      }
+    </script>
+    </body>
+  </html>
+  `;
+
+    const tempHtmlPath = path.join(app.getPath('temp'), 'runtime_compiled_view.html');
+    fs.writeFileSync(tempHtmlPath, htmlContent, 'utf-8');
+
+    const newWin = new BrowserWindow({
+        width: 800,
+        height: 600,
+        webPreferences: {
+            nodeIntegration: false,
+            contextIsolation: true,
+        },
+    });
+
+    newWin.webContents.on('did-finish-load', async () => {
+        // Measure the maximum width and height of the document
+        const { width, height } = await newWin.webContents.executeJavaScript(`
+    ({
+      width: Math.max(
+        document.documentElement.clientWidth,
+        document.documentElement.scrollWidth,
+        document.body ? document.body.scrollWidth : 0
+      ),
+      height: Math.max(
+        document.documentElement.clientHeight,
+        document.documentElement.scrollHeight,
+        document.body ? document.body.scrollHeight : 0
+      )
+    })
+  `);
+        // Update the window's content size
+        newWin.setContentSize(width, height);
+    });
+
+    newWin.loadFile(tempHtmlPath);
 }
 
 // When Electron has finished initialization, create window
 app.whenReady().then(() => {
-  console.log('Uploads directory:', getUploadsDir());
-  appServer = startServer(PORT);
-  
-  createMainWindow();
+    // Register a custom protocol to serve assets from the local assets directory
+    protocol.registerFileProtocol('app-assets', (request, callback) => {
+        const assetPath = decodeURI(request.url.replace('app-assets://', ''));
+        callback({path: path.join(__dirname, 'assets', assetPath)});
+    });
 
-  app.on('activate', function () {
-    // On macOS it's common to re-create a window when the dock icon is clicked
-    if (BrowserWindow.getAllWindows().length === 0) createMainWindow();
-  });
+    console.log('Uploads directory:', getUploadsDir());
+    appServer = startServer(PORT);
+
+    createMainWindow();
+
+    app.on('activate', function () {
+        // On macOS it's common to re-create a window when the dock icon is clicked
+        if (BrowserWindow.getAllWindows().length === 0) createMainWindow();
+    });
 });
 
 // Quit when all windows are closed, except on macOS
 app.on('window-all-closed', function () {
-  if (process.platform !== 'darwin') app.quit();
+    if (process.platform !== 'darwin') app.quit();
 });
 
 app.on('quit', () => {
-  if (appServer) {
-    appServer.close();
-  }
+    if (appServer) {
+        appServer.close();
+    }
 });
 
 ipcMain.handle('open-file', async (_, selectedFile: string) => {
-  const uploadsDir = getUploadsDir();
-  console.log('Selected file:', selectedFile);
-  if (!selectedFile.startsWith(uploadsDir)) {
-    console.warn('Selected file is not in uploadsDir');
-    return null;
-  }
-  createNewWindow(selectedFile);
-  return selectedFile;
+    const uploadsDir = getUploadsDir();
+    console.log('Selected file:', selectedFile);
+    if (!selectedFile.startsWith(uploadsDir)) {
+        console.warn('Selected file is not in uploadsDir');
+        return null;
+    }
+    createNewWindowWithTSX(selectedFile);
+    return selectedFile;
 });
 
 // Handle IPC requests from renderer to server
 ipcMain.handle('server-request', async (_, endpoint, data) => {
-  try {
-    // Base URL for server requests
-    const baseUrl = `http://localhost:${PORT}`;
+    try {
+        // Base URL for server requests
+        const baseUrl = `http://localhost:${PORT}`;
 
-    console.log(`Making request to ${baseUrl}${endpoint}`, data ? 'with data' : 'without data');
+        console.log(`Making request to ${baseUrl}${endpoint}`, data ? 'with data' : 'without data');
 
-    // Handle different HTTP methods
-    if (data && endpoint === '/upload') {
-      console.log('Handling file upload request');
+        // Handle different HTTP methods
+        if (data && endpoint === '/upload') {
+            console.log('Handling file upload request');
 
-      // For file uploads, make a POST request with the data
-      const response = await fetch(`${baseUrl}${endpoint}`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(data)
-      });
+            // For file uploads, make a POST request with the data
+            const response = await fetch(`${baseUrl}${endpoint}`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(data)
+            });
 
-      if (!response.ok) {
-        const errorText = await response.text();
-        console.error(`Server responded with ${response.status}:`, errorText);
-        throw new Error(`Server error: ${response.status}`);
-      }
+            if (!response.ok) {
+                const errorText = await response.text();
+                console.error(`Server responded with ${response.status}:`, errorText);
+                throw new Error(`Server error: ${response.status}`);
+            }
 
-      const result = await response.json();
-      console.log('Upload response:', result);
-      return result;
-    } else {
-      // For other endpoints, make a GET request
-      const response = await fetch(`${baseUrl}${endpoint}`);
+            const result = await response.json();
+            console.log('Upload response:', result);
+            return result;
+        } else {
+            // For other endpoints, make a GET request
+            const response = await fetch(`${baseUrl}${endpoint}`);
 
-      if (!response.ok) {
-        const errorText = await response.text();
-        console.error(`Server responded with ${response.status}:`, errorText);
-        throw new Error(`Server error: ${response.status}`);
-      }
+            if (!response.ok) {
+                const errorText = await response.text();
+                console.error(`Server responded with ${response.status}:`, errorText);
+                throw new Error(`Server error: ${response.status}`);
+            }
 
-      const result = await response.json();
-      console.log('API response:', result);
-      return result;
+            const result = await response.json();
+            console.log('API response:', result);
+            return result;
+        }
+    } catch (error) {
+        console.error('Error in server request:', error);
+        throw error;
     }
-  } catch (error) {
-    console.error('Error in server request:', error);
-    throw error;
-  }
 });
