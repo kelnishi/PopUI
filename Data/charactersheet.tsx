@@ -1,193 +1,265 @@
-import React, { useState, FormEvent } from 'react';
-
-interface Character {
-  name: string;
-  race: string;
-  class: string;
-  level: number;
-  strength: number;
-  dexterity: number;
-  constitution: number;
-  intelligence: number;
-  wisdom: number;
-  charisma: number;
-  background: string;
-}
+import React, { useState } from 'react';
 
 const CharacterSheet: React.FC = () => {
-  const [character, setCharacter] = useState<Character>({
-    name: '',
-    race: '',
-    class: '',
-    level: 1,
-    strength: 10,
-    dexterity: 10,
-    constitution: 10,
-    intelligence: 10,
-    wisdom: 10,
-    charisma: 10,
-    background: ''
-  });
+    // State for basic info
+    const [name, setName] = useState('');
+    const [race, setRace] = useState('Human');
+    const [charClass, setCharClass] = useState('Fighter');
+    const [alignment, setAlignment] = useState('True Neutral');
+    const [level, setLevel] = useState(1);
 
-  const handleChange = (
-    e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>
-  ) => {
-    const { name, value } = e.target;
-    setCharacter((prev) => ({
-      ...prev,
-      [name]:
-        name === 'level' ||
-        name === 'strength' ||
-        name === 'dexterity' ||
-        name === 'constitution' ||
-        name === 'intelligence' ||
-        name === 'wisdom' ||
-        name === 'charisma'
-          ? parseInt(value, 10)
-          : value
-    }));
-  };
+    // State for ability scores
+    const [strength, setStrength] = useState(10);
+    const [dexterity, setDexterity] = useState(10);
+    const [constitution, setConstitution] = useState(10);
+    const [intelligence, setIntelligence] = useState(10);
+    const [wisdom, setWisdom] = useState(10);
+    const [charisma, setCharisma] = useState(10);
 
-  const handleSubmit = (e: FormEvent) => {
-    e.preventDefault();
-    // Handle your submit logic here (e.g., send data via Electron IPC)
-    console.log('Character submitted:', character);
-  };
+    // State for additional picker widget (e.g., hair color)
+    const [hairColor, setHairColor] = useState('#000000');
 
-  return (
-    <form
-      onSubmit={handleSubmit}
-      style={{ maxWidth: '600px', margin: '0 auto', padding: '20px' }}
-    >
-      <h1>RPG Character Sheet</h1>
+    const handleSubmit = (e: React.FormEvent) => {
+        e.preventDefault();
+        const characterData = {
+            name,
+            race,
+            class: charClass,
+            alignment,
+            level,
+            abilities: { strength, dexterity, constitution, intelligence, wisdom, charisma },
+            hairColor,
+        };
+        console.log('Submitted character:', characterData);
+        // Additional submission logic can be added here.
+    };
 
-      <div>
-        <label htmlFor="name">Name:</label>
-        <input
-          type="text"
-          id="name"
-          name="name"
-          value={character.name}
-          onChange={handleChange}
-        />
-      </div>
+    // Inline styling objects for good alignment and visual appeal
+    const containerStyle: React.CSSProperties = {
+        maxWidth: '600px',
+        margin: '0 auto',
+        padding: '20px',
+        fontFamily: 'Arial, sans-serif',
+    };
 
-      <div>
-        <label htmlFor="race">Race:</label>
-        <input
-          type="text"
-          id="race"
-          name="race"
-          value={character.race}
-          onChange={handleChange}
-        />
-      </div>
+    const sectionStyle: React.CSSProperties = {
+        marginBottom: '20px',
+    };
 
-      <div>
-        <label htmlFor="class">Class:</label>
-        <input
-          type="text"
-          id="class"
-          name="class"
-          value={character.class}
-          onChange={handleChange}
-        />
-      </div>
+    const labelStyle: React.CSSProperties = {
+        display: 'block',
+        marginBottom: '5px',
+        fontWeight: 'bold',
+    };
 
-      <div>
-        <label htmlFor="level">Level:</label>
-        <input
-          type="number"
-          id="level"
-          name="level"
-          value={character.level}
-          onChange={handleChange}
-        />
-      </div>
+    const inputStyle: React.CSSProperties = {
+        width: '100%',
+        padding: '8px',
+        marginBottom: '10px',
+        borderRadius: '4px',
+        border: '1px solid #ccc',
+    };
 
-      <h2>Attributes</h2>
+    const gridStyle: React.CSSProperties = {
+        display: 'grid',
+        gridTemplateColumns: '1fr 1fr',
+        gap: '20px',
+    };
 
-      <div>
-        <label htmlFor="strength">Strength:</label>
-        <input
-          type="number"
-          id="strength"
-          name="strength"
-          value={character.strength}
-          onChange={handleChange}
-        />
-      </div>
+    const buttonStyle: React.CSSProperties = {
+        width: '100%',
+        padding: '10px',
+        backgroundColor: '#4CAF50',
+        color: 'white',
+        border: 'none',
+        borderRadius: '4px',
+        cursor: 'pointer',
+        fontSize: '16px',
+    };
 
-      <div>
-        <label htmlFor="dexterity">Dexterity:</label>
-        <input
-          type="number"
-          id="dexterity"
-          name="dexterity"
-          value={character.dexterity}
-          onChange={handleChange}
-        />
-      </div>
+    return (
+        <div style={containerStyle}>
+            <h2>Edit RPG Character Sheet</h2>
+            <form onSubmit={handleSubmit}>
+                {/* Character Name */}
+                <div style={sectionStyle}>
+                    <label style={labelStyle} htmlFor="name">Character Name</label>
+                    <input
+                        type="text"
+                        id="name"
+                        value={name}
+                        style={inputStyle}
+                        onChange={(e) => setName(e.target.value)}
+                        placeholder="Enter character name"
+                    />
+                </div>
 
-      <div>
-        <label htmlFor="constitution">Constitution:</label>
-        <input
-          type="number"
-          id="constitution"
-          name="constitution"
-          value={character.constitution}
-          onChange={handleChange}
-        />
-      </div>
+                {/* Race Dropdown */}
+                <div style={sectionStyle}>
+                    <label style={labelStyle} htmlFor="race">Race</label>
+                    <select
+                        id="race"
+                        value={race}
+                        style={inputStyle}
+                        onChange={(e) => setRace(e.target.value)}
+                    >
+                        <option value="Human">Human</option>
+                        <option value="Elf">Elf</option>
+                        <option value="Dwarf">Dwarf</option>
+                        <option value="Halfling">Halfling</option>
+                        <option value="Orc">Orc</option>
+                    </select>
+                </div>
 
-      <div>
-        <label htmlFor="intelligence">Intelligence:</label>
-        <input
-          type="number"
-          id="intelligence"
-          name="intelligence"
-          value={character.intelligence}
-          onChange={handleChange}
-        />
-      </div>
+                {/* Class Dropdown */}
+                <div style={sectionStyle}>
+                    <label style={labelStyle} htmlFor="class">Class</label>
+                    <select
+                        id="class"
+                        value={charClass}
+                        style={inputStyle}
+                        onChange={(e) => setCharClass(e.target.value)}
+                    >
+                        <option value="Fighter">Fighter</option>
+                        <option value="Wizard">Wizard</option>
+                        <option value="Rogue">Rogue</option>
+                        <option value="Cleric">Cleric</option>
+                        <option value="Ranger">Ranger</option>
+                        <option value="Paladin">Paladin</option>
+                    </select>
+                </div>
 
-      <div>
-        <label htmlFor="wisdom">Wisdom:</label>
-        <input
-          type="number"
-          id="wisdom"
-          name="wisdom"
-          value={character.wisdom}
-          onChange={handleChange}
-        />
-      </div>
+                {/* Alignment Dropdown */}
+                <div style={sectionStyle}>
+                    <label style={labelStyle} htmlFor="alignment">Alignment</label>
+                    <select
+                        id="alignment"
+                        value={alignment}
+                        style={inputStyle}
+                        onChange={(e) => setAlignment(e.target.value)}
+                    >
+                        <option value="Lawful Good">Lawful Good</option>
+                        <option value="Neutral Good">Neutral Good</option>
+                        <option value="Chaotic Good">Chaotic Good</option>
+                        <option value="Lawful Neutral">Lawful Neutral</option>
+                        <option value="True Neutral">True Neutral</option>
+                        <option value="Chaotic Neutral">Chaotic Neutral</option>
+                        <option value="Lawful Evil">Lawful Evil</option>
+                        <option value="Neutral Evil">Neutral Evil</option>
+                        <option value="Chaotic Evil">Chaotic Evil</option>
+                    </select>
+                </div>
 
-      <div>
-        <label htmlFor="charisma">Charisma:</label>
-        <input
-          type="number"
-          id="charisma"
-          name="charisma"
-          value={character.charisma}
-          onChange={handleChange}
-        />
-      </div>
+                {/* Level Slider */}
+                <div style={sectionStyle}>
+                    <label style={labelStyle} htmlFor="level">Level: {level}</label>
+                    <input
+                        type="range"
+                        id="level"
+                        value={level}
+                        style={{ width: '100%' }}
+                        min={1}
+                        max={20}
+                        onChange={(e) => setLevel(parseInt(e.target.value))}
+                    />
+                </div>
 
-      <div>
-        <label htmlFor="background">Background:</label>
-        <textarea
-          id="background"
-          name="background"
-          value={character.background}
-          onChange={handleChange}
-        />
-      </div>
+                {/* Ability Scores using sliders in a grid layout */}
+                <div style={sectionStyle}>
+                    <h3>Ability Scores</h3>
+                    <div style={gridStyle}>
+                        <div>
+                            <label style={labelStyle} htmlFor="strength">Strength: {strength}</label>
+                            <input
+                                type="range"
+                                id="strength"
+                                value={strength}
+                                style={{ width: '100%' }}
+                                min={1}
+                                max={20}
+                                onChange={(e) => setStrength(parseInt(e.target.value))}
+                            />
+                        </div>
+                        <div>
+                            <label style={labelStyle} htmlFor="dexterity">Dexterity: {dexterity}</label>
+                            <input
+                                type="range"
+                                id="dexterity"
+                                value={dexterity}
+                                style={{ width: '100%' }}
+                                min={1}
+                                max={20}
+                                onChange={(e) => setDexterity(parseInt(e.target.value))}
+                            />
+                        </div>
+                        <div>
+                            <label style={labelStyle} htmlFor="constitution">Constitution: {constitution}</label>
+                            <input
+                                type="range"
+                                id="constitution"
+                                value={constitution}
+                                style={{ width: '100%' }}
+                                min={1}
+                                max={20}
+                                onChange={(e) => setConstitution(parseInt(e.target.value))}
+                            />
+                        </div>
+                        <div>
+                            <label style={labelStyle} htmlFor="intelligence">Intelligence: {intelligence}</label>
+                            <input
+                                type="range"
+                                id="intelligence"
+                                value={intelligence}
+                                style={{ width: '100%' }}
+                                min={1}
+                                max={20}
+                                onChange={(e) => setIntelligence(parseInt(e.target.value))}
+                            />
+                        </div>
+                        <div>
+                            <label style={labelStyle} htmlFor="wisdom">Wisdom: {wisdom}</label>
+                            <input
+                                type="range"
+                                id="wisdom"
+                                value={wisdom}
+                                style={{ width: '100%' }}
+                                min={1}
+                                max={20}
+                                onChange={(e) => setWisdom(parseInt(e.target.value))}
+                            />
+                        </div>
+                        <div>
+                            <label style={labelStyle} htmlFor="charisma">Charisma: {charisma}</label>
+                            <input
+                                type="range"
+                                id="charisma"
+                                value={charisma}
+                                style={{ width: '100%' }}
+                                min={1}
+                                max={20}
+                                onChange={(e) => setCharisma(parseInt(e.target.value))}
+                            />
+                        </div>
+                    </div>
+                </div>
 
-      <div style={{ marginTop: '20px' }}>
-        <button type="submit">Submit</button>
-      </div>
-    </form>
-  );
+                {/* Color Picker for Hair Color */}
+                <div style={sectionStyle}>
+                    <label style={labelStyle} htmlFor="hairColor">Hair Color</label>
+                    <input
+                        type="color"
+                        id="hairColor"
+                        value={hairColor}
+                        style={{ width: '100%', height: '40px', border: 'none', padding: '0' }}
+                        onChange={(e) => setHairColor(e.target.value)}
+                    />
+                </div>
+
+                {/* Submit Button */}
+                <button type="submit" style={buttonStyle}>Submit</button>
+            </form>
+        </div>
+    );
 };
 
 export default CharacterSheet;
