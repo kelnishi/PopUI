@@ -16,7 +16,7 @@ let serverInstance: Server | null = null;
 
 export interface SseServer {
     server: Server;
-    transport: SSEServerTransport | null;
+    transports: Map<string, SSEServerTransport> | null;
     mcp: McpServer;
 }
 
@@ -229,7 +229,7 @@ export function startMcp(port: number) : SseServer {
     
     return {
         server: serverInstance, 
-        transport: null,
+        transports: transports,
         mcp: mcpServer
     };
 }

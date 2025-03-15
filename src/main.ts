@@ -1,4 +1,4 @@
-import {app, BrowserWindow, ipcMain, protocol} from 'electron';
+import {app, BrowserWindow, ipcMain, protocol, Tray, nativeImage} from 'electron';
 import * as fs from 'fs';
 import * as path from 'path';
 import {SseServer, startMcp, startServer} from './server';
@@ -11,6 +11,9 @@ let mcpServer: SseServer | null;
 let mainWindow: BrowserWindow | null = null;
 const PORT = 3001;
 const MCP_PORT = 3002;
+
+let tray : Tray | null;
+let dropdownWindow : BrowserWindow | null;
 
 function createMainWindow() {
     // Create the browser window
@@ -31,20 +34,6 @@ function createMainWindow() {
     if (process.env.NODE_ENV === 'development') {
         mainWindow.webContents.openDevTools();
     }
-}
-
-function createNewWindow(filePath: string) {
-    const newWin = new BrowserWindow({
-        width: 800,
-        height: 600,
-        webPreferences: {
-            nodeIntegration: false,
-            contextIsolation: true,
-        },
-    });
-
-    // Assuming filePath points to an HTML file that bootstraps the React UI
-    newWin.loadFile(filePath);
 }
 
 // In the createNewWindowWithTSX function, update the asset URLs to use the custom protocol:
@@ -157,6 +146,35 @@ function createNewWindowWithTSX(tsxFilePath: string) {
     newWin.loadFile(tempHtmlPath);
 }
 
+function showDropdownWindow() {
+    if (!dropdownWindow) {
+        dropdownWindow = new BrowserWindow({
+            width: 600,
+            height: 800,
+            frame: false,
+            resizable: false,
+            show: false,
+            transparent: false,
+            webPreferences: {
+                preload: path.join(__dirname, 'preload.js'),
+                nodeIntegration: false,
+                contextIsolation: true,
+            }
+        });
+        // Load your React app (e.g., a local HTML file that bootstraps React)
+        dropdownWindow.loadFile(path.join(__dirname, 'renderer/index.html'));
+
+        // Hide window when it loses focus
+        dropdownWindow.on('blur', () => {
+            if (dropdownWindow) dropdownWindow.hide();
+        });
+    }
+
+    // Position the window based on the tray icon's location
+    // (Positioning logic is platform-specific and may require additional code.)
+    dropdownWindow.show();
+}
+
 // When Electron has finished initialization, create window
 app.whenReady().then(() => {
     // Register a custom protocol to serve assets from the local assets directory
@@ -164,13 +182,30 @@ app.whenReady().then(() => {
         const assetPath = decodeURI(request.url.replace('app-assets://', ''));
         callback({path: path.join(__dirname, 'assets', assetPath)});
     });
+    
+    //Install a menubar icon
+    const iconPath = path.join(__dirname, 'assets', 'icon.png');
+    console.log(`Loading tray icon from ${iconPath}`);
+    const trayIcon = nativeImage.createFromPath(iconPath);
+    trayIcon.setTemplateImage(true);
+    tray = new Tray(trayIcon);
+    
+    tray.on('click', () => {
+        if (dropdownWindow && dropdownWindow.isVisible()) {
+            console.log("Hiding dropdown window");
+            dropdownWindow.hide();
+        } else {
+            console.log("Showing dropdown window");
+            showDropdownWindow();
+        }
+    });
 
     console.log('Uploads directory:', getUploadsDir());
     appServer = startServer(PORT);
     
     mcpServer = startMcp(MCP_PORT);
 
-    createMainWindow();
+    // createMainWindow();
 
     app.on('activate', function () {
         // On macOS it's common to re-create a window when the dock icon is clicked
@@ -245,7 +280,7 @@ ipcMain.handle('server-request', async (_, endpoint, data) => {
             }
 
             const result = await response.json();
-            console.log('API response:', result);
+            // console.log('API response:', result);
             return result;
         }
     } catch (error) {

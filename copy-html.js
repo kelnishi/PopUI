@@ -41,4 +41,14 @@ assetsToCopy.forEach(({ src, dest }) => {
   console.log(`Copied ${src} to ${dest}`);
 });
 
-console.log('Assets copied to dist/assets directory');
+// Source and destination paths for assets directory
+const srcAssetsDir = path.resolve(__dirname, 'src/assets');
+const destAssetsDir = path.resolve(__dirname, 'dist/assets');
+
+//Iterate over srcAssetsDir directory and copy files to destAssetsDir
+fs.readdirSync(srcAssetsDir).forEach(file => {
+  const srcFile = path.join(srcAssetsDir, file);
+  const destFile = path.join(destAssetsDir, file);
+  fs.copyFileSync(srcFile, destFile);
+  console.log(`Copied ${srcFile} to ${destFile}`);
+});
