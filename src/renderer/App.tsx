@@ -114,6 +114,7 @@ const App: React.FC = () => {
                             type="file"
                             name="file"
                             required
+                            accept=".tsx"
                             style={{marginRight: '10px'}}
                         />
                         <button

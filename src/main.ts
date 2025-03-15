@@ -1,14 +1,16 @@
-import {app, BrowserWindow, dialog, ipcMain, protocol} from 'electron';
+import {app, BrowserWindow, ipcMain, protocol} from 'electron';
 import * as fs from 'fs';
 import * as path from 'path';
-import {startServer} from './server';
+import {SseServer, startMcp, startServer} from './server';
 import {Server} from "http";
 import {getUploadsDir} from './utils/paths';
 
 let appServer: Server | null;
+let mcpServer: SseServer | null;
 
 let mainWindow: BrowserWindow | null = null;
-const PORT = 3000;
+const PORT = 3001;
+const MCP_PORT = 3002;
 
 function createMainWindow() {
     // Create the browser window
@@ -53,10 +55,6 @@ function createNewWindowWithTSX(tsxFilePath: string) {
     const filename = path.basename(tsxFilePath);
 
     // Reference local assets via the custom protocol
-    const babelURL = 'app-assets://babel.min.js';
-    const reactURL = 'app-assets://react.development.js';
-    const reactDomURL = 'app-assets://react-dom.development.js';
-
     // Create an HTML template that loads local React, Babel, and then compiles our TSX code.
     const htmlContent = `
   <!DOCTYPE html>
@@ -65,10 +63,10 @@ function createNewWindowWithTSX(tsxFilePath: string) {
       <meta charset="utf-8" />
       <title>${filename}</title>
       <!-- Load local React and ReactDOM -->
-      <script src="${reactURL}"></script>
-      <script src="${reactDomURL}"></script>
+      <script src="app-assets://react.development.js"></script>
+      <script src="app-assets://react-dom.development.js"></script>
       <!-- Load local Babel Standalone -->
-      <script src="${babelURL}"></script>
+      <script src="app-assets://babel.min.js"></script>
     </head>
     <body>
       <div id="root"></div>
@@ -121,7 +119,10 @@ function createNewWindowWithTSX(tsxFilePath: string) {
   </html>
   `;
 
-    const tempHtmlPath = path.join(app.getPath('temp'), 'runtime_compiled_view.html');
+    //filename without ext
+    const filenameWithoutExt = path.basename(tsxFilePath, path.extname(tsxFilePath));
+    
+    const tempHtmlPath = path.join(app.getPath('temp'), filenameWithoutExt+'.html');
     fs.writeFileSync(tempHtmlPath, htmlContent, 'utf-8');
 
     const newWin = new BrowserWindow({
@@ -166,6 +167,8 @@ app.whenReady().then(() => {
 
     console.log('Uploads directory:', getUploadsDir());
     appServer = startServer(PORT);
+    
+    mcpServer = startMcp(MCP_PORT);
 
     createMainWindow();
 
@@ -186,14 +189,18 @@ app.on('quit', () => {
     }
 });
 
-ipcMain.handle('open-file', async (_, selectedFile: string) => {
+export function openFile(selectedFile: string) {
     const uploadsDir = getUploadsDir();
-    console.log('Selected file:', selectedFile);
     if (!selectedFile.startsWith(uploadsDir)) {
         console.warn('Selected file is not in uploadsDir');
-        return null;
+        return;
     }
     createNewWindowWithTSX(selectedFile);
+}
+
+ipcMain.handle('open-file', async (_, selectedFile: string) => {
+    console.log('Selected file:', selectedFile);
+    openFile(selectedFile);
     return selectedFile;
 });
 
