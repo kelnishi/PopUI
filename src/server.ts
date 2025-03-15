@@ -1,7 +1,8 @@
 import express from 'express';
 import {Server} from 'http';
-import {McpServer} from "@modelcontextprotocol/sdk/server/mcp.js";
-import {StdioServerTransport} from "@modelcontextprotocol/sdk/server/stdio.js";
+import {McpServer, ResourceTemplate} from "@modelcontextprotocol/sdk/server/mcp.js";
+import {TextContent} from "@modelcontextprotocol/sdk/types.js";
+
 import {SSEServerTransport} from "@modelcontextprotocol/sdk/server/sse.js";
 import {z} from "zod";
 
@@ -130,6 +131,13 @@ export function startMcp(port: number) : SseServer {
 
     mcpServer.tool(
         "pop-ui",
+        "Use this tool to create and display an interactive user interface or control panel.\n" +
+        "The tool will display a react component in an electron BrowserWindow passed in via the tsx parameter.\n" +
+        "The react component should export a function called 'getState' to get the current state of the user interface as a detailed json model object.\n" +
+        "The react component should have good styling and alignment for an electron app UI.\n" +
+        "The react component should use appropriate widgets for ranges, enumerations, and other selectable data.\n" +
+        "The tool will respond with the name of the instantiated user interface.\n" +
+        "In future queries, retrieve the user interface data and state via the resources endpoint.\n",
         {
             name: z.string(),
             tsx: z.string(),
@@ -143,11 +151,70 @@ export function startMcp(port: number) : SseServer {
             //Signal the app to open the file
             openFile(filePath);
 
-            const pointer = {file: fileName};
+            mcpServer.server.notification({
+                method: "notifications/resources/list_changed",
+            });
+            
             return {
-                content: [{type: "text", text: JSON.stringify(pointer, null, 2)}]
+                content: [
+                    {
+                        type: "text",
+                        text: `User interface named "${name}" created and shown. Use read-ui://${name} to retrieve the user interface data and state.`
+                    } as TextContent
+                ],
+                isError: false
             }
         }
+    );
+    
+    mcpServer.tool(
+      "show-ui",
+      "This tool will open an existing user interface created with the pop-ui tool.",
+        {
+            name: z.string(),
+        },
+        async ({name}) => {
+            //Save the tsx file to the uploads directory
+            const fileName = `${name}.tsx`;
+            const filePath = path.join(uploadsDir, fileName);
+            
+            //Check if the file exists
+            if (!fs.existsSync(filePath)) {
+                return {
+                    content: [
+                        {
+                            type: "text",
+                            text: `User interface named "${name}" does not exist. Use the pop-ui tool to create a user interface.`
+                        } as TextContent
+                    ],
+                    isError: true
+                }
+            }
+            
+            //Signal the app to open the file
+            openFile(filePath);
+
+            return {
+                content: [
+                    {
+                        type: "text",
+                        text: `User interface named "${name}" has been shown. Use read-ui://${name} to retrieve the user interface data and state.`
+                    } as TextContent
+                ],
+                isError: false
+            }
+        }
+    );
+    
+    mcpServer.resource(
+        "read-ui",
+        new ResourceTemplate("read-ui://{name}", { list: undefined }),
+        async (uri, { name }) => ({
+            contents: [{
+                uri: uri.href,
+                text: `UI data model state for ${name}`
+            }]
+        })
     );
 
     const transports = new Map();
