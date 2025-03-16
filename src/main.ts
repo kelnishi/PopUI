@@ -1,4 +1,4 @@
-import {app, BrowserWindow, ipcMain, protocol, Tray, nativeImage} from 'electron';
+import {app, BrowserWindow, ipcMain, nativeImage, protocol, Tray} from 'electron';
 import * as fs from 'fs';
 import * as path from 'path';
 import {SseServer, startMcp, startServer} from './server';
@@ -14,6 +14,8 @@ const MCP_PORT = 3002;
 
 let tray : Tray | null;
 let dropdownWindow : BrowserWindow | null;
+
+let windows = new Map<string, BrowserWindow>();
 
 function createMainWindow() {
     // Create the browser window
@@ -37,7 +39,7 @@ function createMainWindow() {
 }
 
 // In the createNewWindowWithTSX function, update the asset URLs to use the custom protocol:
-function createNewWindowWithTSX(tsxFilePath: string) {
+function createNewWindowWithTSX(filenameWithoutExt : string, tsxFilePath: string) : BrowserWindow {
     // Read the TSX file
     const tsxCode = fs.readFileSync(tsxFilePath, 'utf-8');
 
@@ -97,19 +99,28 @@ function createNewWindowWithTSX(tsxFilePath: string) {
       if (!Component) {
         console.error("No component was found in the module exports.");
       } else {
-        // Render the component into the #root element.
+        // Render the component into the #root element with a ref to capture the instance.
         ReactDOM.render(
-          React.createElement(Component),
+          React.createElement(Component, { ref: (instance) => {
+              window.myComponent = instance;
+          } }),
           document.getElementById("root")
         );
+        
+        // Setup a global function to execute the getState method from the component.
+        window.executeGetState = function() {
+          if (window.myComponent && typeof window.myComponent.getState === 'function') {
+            return window.myComponent.getState();
+          } else {
+            console.error("getState function is not available on the component.");
+            return null;
+          }
+        };
       }
     </script>
     </body>
   </html>
   `;
-
-    //filename without ext
-    const filenameWithoutExt = path.basename(tsxFilePath, path.extname(tsxFilePath));
     
     const tempHtmlPath = path.join(app.getPath('temp'), filenameWithoutExt+'.html');
     fs.writeFileSync(tempHtmlPath, htmlContent, 'utf-8');
@@ -142,8 +153,10 @@ function createNewWindowWithTSX(tsxFilePath: string) {
         // Update the window's content size
         newWin.setContentSize(width, height);
     });
-
+    
     newWin.loadFile(tempHtmlPath);
+    
+    return newWin;
 }
 
 function showDropdownWindow() {
@@ -224,13 +237,50 @@ app.on('quit', () => {
     }
 });
 
+export async function readWindow(name: string) {
+    console.log(`Reading window: ${name}`);
+    
+    const win = windows.get(name);
+    if (!win) {
+        console.warn('Window not found:', name);
+        return null;
+    }
+    
+    console.log(`Found window: ${name}`);
+    // Execute the getState method on the component instance
+    const state = await win.webContents.executeJavaScript('window.getState()');
+    
+    return JSON.stringify(state, null, 2);
+}
+
+export function listWindows() {
+    return Array.from(windows.keys());
+}
+
 export function openFile(selectedFile: string) {
     const uploadsDir = getUploadsDir();
     if (!selectedFile.startsWith(uploadsDir)) {
         console.warn('Selected file is not in uploadsDir');
         return;
     }
-    createNewWindowWithTSX(selectedFile);
+    //Get any existing window for the file
+    const existingWin = windows.get(selectedFile);
+    if (existingWin) {
+        existingWin.focus();
+        return;
+    }
+    
+    //filename without ext
+    const filenameWithoutExt = path.basename(selectedFile, path.extname(selectedFile));
+    const newWin = createNewWindowWithTSX(filenameWithoutExt, selectedFile);
+    
+    //When the window is closed, remove it from the windows map
+    newWin.on('closed', () => {
+        windows.delete(filenameWithoutExt);
+    });
+    
+    //Save the window to a global map
+    windows.set(filenameWithoutExt, newWin);
 }
 
 ipcMain.handle('open-file', async (_, selectedFile: string) => {
