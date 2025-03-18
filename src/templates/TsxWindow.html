@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>${filename}</title>
+  <!-- Load local React and ReactDOM -->
+  <script src="assets://react.development.js"></script>
+  <script src="assets://react-dom.development.js"></script>
+  <!-- Load local Babel Standalone -->
+  <script src="assets://babel.min.js"></script>
+
+  <link href="styles://output.css" rel="stylesheet">
+</head>
+<body>
+<div id="root"></div>
+<!-- Embed the TSX code in a script that Babel will compile -->
+<script id="module-code" type="text/plain">
+  ${tsxCode}
+</script>
+<script>
+  // Get the inline TSX code
+  const sourceCode = document.getElementById('module-code').textContent;
+
+  // Transform the code using Babel. We use the presets for React and TypeScript.
+  const { code } = Babel.transform(sourceCode, {
+    filename: '${filename}', // Provide a filename for Babel to resolve parsing correctly.
+    presets: [
+      ['env', { modules: 'commonjs' }], // Transforms ES modules to CommonJS.
+      'react',
+      'typescript'
+    ]
+  });
+
+  // Create a require function that returns React when asked for it.
+  const requireFn = (moduleName) => {
+    if (moduleName === 'react') return React;
+    throw new Error("Module not found: " + moduleName);
+  };
+
+  const module = { exports: {} };
+  const exports = module.exports;
+
+  new Function("require", "module", "exports", code)(requireFn, module, exports);
+
+  // If there is a default export, use it; otherwise, pick the first export.
+  const Component =
+          module.exports.default ||
+          Object.values(module.exports)[0];
+
+  if (!Component) {
+    console.error("No component was found in the module exports.");
+  } else {
+    const rootElement = document.getElementById("root");
+    if (rootElement) {
+      const root = ReactDOM.createRoot(rootElement);
+
+      // Check if Component is a class (can accept refs) or function component
+      const isClassComponent = Component.prototype && Component.prototype.isReactComponent;
+
+      if (isClassComponent) {
+        // For class components, we can use refs
+        root.render(
+                React.createElement(Component, {
+                  ref: (instance) => {
+                    window.myComponent = instance;
+                  }
+                })
+        );
+      } else {
+        // For function components, don't use refs
+        root.render(
+                React.createElement(Component, {})
+        );
+
+        // Alternative approach if you need window access:
+        window.myComponent = { getState: () => {} }; // Stub implementation
+
+        // You could patch this later if the component exports state methods
+        // through props or context
+      }
+    }
+  }
+</script>
+</body>
+</html>

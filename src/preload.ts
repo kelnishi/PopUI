@@ -15,7 +15,13 @@ if (contextBridge && ipcRenderer) {
     openFile: (filename: string) => {
       console.log(`Preload: openFile ${filename}`);
       return ipcRenderer.invoke('open-file', filename);
+    },
+    
+    showFile: (filename: string) => {
+      console.log(`Preload: showFile ${filename}`);
+      return ipcRenderer.invoke('show-file', filename);
     }
+    
   });
 } else {
   console.error('Electron APIs not available in preload script');

@@ -7,6 +7,7 @@ declare global {
         api: {
             serverRequest: (endpoint: string, data?: any) => Promise<any>;
             openFile: (windowName: string) => Promise<any>;
+            showFile: (windowName: string) => Promise<any>;
         };
     }
 }
@@ -42,6 +43,13 @@ const App: React.FC = () => {
         const filePath = await window.api.openFile(selectedFile);
         if (filePath) {
             console.log('Opened file:', filePath);
+        }
+    };
+
+    const handleShowFile = async (selectedFile: string) => {
+        const filePath = await window.api.showFile(selectedFile);
+        if (filePath) {
+            console.log('Shown file:', filePath);
         }
     };
 
@@ -95,9 +103,12 @@ const App: React.FC = () => {
                     <ul>
                         {files.map(file => (
                             <li key={file.name}>
-                                {file.name} - {file.path}
+                                {file.name}
                                 <button onClick={() => handleOpenFile(file.path)} style={{ marginLeft: '10px' }}>
                                     Load File
+                                </button>
+                                <button onClick={() => handleShowFile(file.path)} style={{ marginLeft: '10px' }}>
+                                    Show File
                                 </button>
                             </li>
                         ))}

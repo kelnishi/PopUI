@@ -11,7 +11,7 @@ import {getUploadsDir} from './utils/paths';
 import path from 'path';
 import * as fs from "node:fs";
 
-import {openFile, readWindow, listWindows } from './main';
+import {openFile, readWindow, injectWindow, listWindows } from './main';
 
 let serverInstance: Server | null = null;
 
@@ -132,64 +132,136 @@ export function startMcp(port: number) : SseServer {
     mcpServer.tool(
         "pop-ui",
         "Use this tool to create and display an interactive user interface or control panel.\n" +
-        "The tool will display a react component in an electron BrowserWindow passed in via the tsx parameter.\n" +
-        "The react component should set a function 'window.getState()' to get the current state of the user interface as a detailed json model object.\n" +
-        "The react component should have good styling and alignment for an electron app UI.\n" +
-        "The react component should use appropriate widgets for ranges, enumerations, and other selectable data.\n" +
-        "The tool will respond with the name of the instantiated user interface.\n" +
-        "Use the read-ui://${name} resource to retrieve the current user interface data and state.",
+        "The tool will return the model state of the user interface as a json object.",
         {
-            name: z.string(),
-            tsx: z.string(),
+            name: z.string().describe(
+                "The name of the user interface. This name will be used to reference the user interface in read-ui://{name}."
+            ),
+            mode: z.enum(["show", "get", "set"]).optional().describe(
+                "The mode of operation for the user interface. Use " +
+                "'show' to create and show a new user interface, " +
+                "'get' to read the current model state of a user interface, and " +
+                "'set' to inject a model state into a user interface."
+            ),
+            json: z.string().optional().describe(
+                "The json model object to set the initial or updated state of the user interface."
+            ),
+            tsx: z.string().optional().describe(
+                "The react component to display in the electron BrowserWindow." +
+                "This component must be compatible with dynamic loading via babel. " +
+                "This component should set a function 'window.getState()' to get the current state of the user interface as a detailed json model object." +
+                "This component should set a function 'window.setState(json)' to set the current state of the user interface." +
+                "This component should use radix-ui and tailwind for good styling and alignment." +
+                "This component should use appropriate widgets for ranges, enumerations, and other selectable data."
+            ),
         },
-        async ({name, tsx}) => {
-            //Save the tsx file to the uploads directory
+        async ({name, mode, json, tsx}) => {
             const fileName = `${name}.tsx`;
             const filePath = path.join(uploadsDir, fileName);
-
-            await fs.promises.writeFile(filePath, tsx);
-            //Signal the app to open the file
-            openFile(filePath);
-
-            mcpServer.server.notification({
-                method: "notifications/resources/list_changed",
-            });
             
+            if (mode === "show") {
+                if (tsx === undefined) {
+                    //Error: tsx is required
+                    return {
+                        content: [
+                            {
+                                type: "text",
+                                text: `tsx is required when mode is show.`
+                            } as TextContent
+                        ],
+                        isError: true
+                    }
+                }
+                
+                //Save the tsx file to the uploads directory
+                await fs.promises.writeFile(filePath, tsx);
+                //Signal the app to open the file
+                openFile(filePath);
+
+                mcpServer.server.notification({
+                    method: "notifications/resources/list_changed",
+                });
+
+                return {
+                    content: [
+                        {
+                            type: "text",
+                            text: `User interface named "${name}" created and shown. Use read-ui://${name} to retrieve the user interface data and state.`
+                        } as TextContent
+                    ],
+                    isError: false
+                }
+            }
+            // if (mode === "update") {
+            //    
+            // }
+            if (mode === "set") {
+                const windowState = await injectWindow(name as string, json as string);
+
+                if (windowState === null) {
+                    //Error: window not found
+                    return {
+                        content: [
+                            {
+                                type: "text",
+                                text: `User interface named "${name}" not found.`
+                            } as TextContent
+                        ],
+                        isError: true
+                    }
+                }
+                
+                return {
+                    content: [
+                        {
+                            type: "text",
+                            text: `${windowState}`
+                        } as TextContent
+                    ],
+                    isError: false
+                }
+            }
+            if (mode === "get") {
+                //Save the tsx file to the uploads directory
+                const windowState = await readWindow(name as string);
+                
+                if (windowState === null) {
+                    //Error: window not found
+                    return {
+                        content: [
+                            {
+                                type: "text",
+                                text: `User interface named "${name}" not found.`
+                            } as TextContent
+                        ],
+                        isError: true
+                    }
+                }
+
+                return {
+                    content: [
+                        {
+                            type: "text",
+                            text: `${windowState}`
+                        } as TextContent
+                    ],
+                    isError: false
+                }
+            }
+            
+            //Return invalid mode
             return {
                 content: [
                     {
                         type: "text",
-                        text: `User interface named "${name}" created and shown. Use read-ui://${name} to retrieve the user interface data and state.`
+                        text: `Invalid mode "${mode}".`
                     } as TextContent
                 ],
-                isError: false
+                isError: true
             }
         }
     );
     
-    //Hack to get claude to read the data. Resources don't seem to work.
-    mcpServer.tool(
-      "read-ui",
-      "This tool will read an open user interface created by the pop-ui tool.",
-        {
-            name: z.string(),
-        },
-        async ({name}) => {
-            //Save the tsx file to the uploads directory
-            const windowState = await readWindow(name as string);
-
-            return {
-                content: [
-                    {
-                        type: "text",
-                        text: `${windowState}`
-                    } as TextContent
-                ],
-                isError: false
-            }
-        }
-    );
-
     const listResourcesCallback: ListResourcesCallback = (extra): ListResourcesResult => {
         // Get all window names from the windows Map
         const windowNames = listWindows();

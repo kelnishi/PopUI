@@ -1,4 +1,4 @@
-import {app, BrowserWindow, ipcMain, nativeImage, protocol, Tray} from 'electron';
+import {app, BrowserWindow, ipcMain, nativeImage, protocol, Tray, shell } from 'electron';
 import * as fs from 'fs';
 import * as path from 'path';
 import {SseServer, startMcp, startServer} from './server';
@@ -44,83 +44,13 @@ function createNewWindowWithTSX(filenameWithoutExt : string, tsxFilePath: string
     const tsxCode = fs.readFileSync(tsxFilePath, 'utf-8');
 
     const filename = path.basename(tsxFilePath);
-
-    // Reference local assets via the custom protocol
-    // Create an HTML template that loads local React, Babel, and then compiles our TSX code.
-    const htmlContent = `
-  <!DOCTYPE html>
-  <html>
-    <head>
-      <meta charset="utf-8" />
-      <title>${filename}</title>
-      <!-- Load local React and ReactDOM -->
-      <script src="app-assets://react.development.js"></script>
-      <script src="app-assets://react-dom.development.js"></script>
-      <!-- Load local Babel Standalone -->
-      <script src="app-assets://babel.min.js"></script>
-    </head>
-    <body>
-      <div id="root"></div>
-      <!-- Embed the TSX code in a script that Babel will compile -->
-      <script id="module-code" type="text/plain">
-      ${tsxCode}
-      </script>
-      
-      <script>
-      // Get the inline TSX code
-      const sourceCode = document.getElementById('module-code').textContent;
-
-      // Transform the code using Babel. We use the presets for React and TypeScript.
-      const { code } = Babel.transform(sourceCode, {
-          filename: '${filename}', // Provide a filename for Babel to resolve parsing correctly.
-          presets: [
-            ['env', { modules: 'commonjs' }], // Transforms ES modules to CommonJS.
-            'react',
-            'typescript'
-          ]
-        });
-
-        // Create a require function that returns React when asked for it.
-        const requireFn = (moduleName) => {
-          if (moduleName === 'react') return React;
-          throw new Error("Module not found: " + moduleName);
-        };
-        
-        const module = { exports: {} };
-        const exports = module.exports;
-        
-        new Function("require", "module", "exports", code)(requireFn, module, exports);
-
-      // If there is a default export, use it; otherwise, pick the first export.
-      const Component =
-        module.exports.default ||
-        Object.values(module.exports)[0];
-
-      if (!Component) {
-        console.error("No component was found in the module exports.");
-      } else {
-        // Render the component into the #root element with a ref to capture the instance.
-        ReactDOM.render(
-          React.createElement(Component, { ref: (instance) => {
-              window.myComponent = instance;
-          } }),
-          document.getElementById("root")
-        );
-        
-        // Setup a global function to execute the getState method from the component.
-        window.executeGetState = function() {
-          if (window.myComponent && typeof window.myComponent.getState === 'function') {
-            return window.myComponent.getState();
-          } else {
-            console.error("getState function is not available on the component.");
-            return null;
-          }
-        };
-      }
-    </script>
-    </body>
-  </html>
-  `;
+    
+    // Apply the local variables to the TsxWindow.html template file.
+    // ${tsxCode} and ${filename} are placeholders in the template file.
+    const htmlTemplate = fs.readFileSync(path.join(__dirname, 'templates', 'TsxWindow.html'), 'utf-8');
+    const htmlContent = htmlTemplate
+        .replace('${tsxCode}', tsxCode)
+        .replace('${filename}', filename);
     
     const tempHtmlPath = path.join(app.getPath('temp'), filenameWithoutExt+'.html');
     fs.writeFileSync(tempHtmlPath, htmlContent, 'utf-8');
@@ -191,10 +121,16 @@ function showDropdownWindow() {
 // When Electron has finished initialization, create window
 app.whenReady().then(() => {
     // Register a custom protocol to serve assets from the local assets directory
-    protocol.registerFileProtocol('app-assets', (request, callback) => {
-        const assetPath = decodeURI(request.url.replace('app-assets://', ''));
+    protocol.registerFileProtocol('assets', (request, callback) => {
+        const assetPath = decodeURI(request.url.replace('assets://', ''));
         callback({path: path.join(__dirname, 'assets', assetPath)});
     });
+
+    protocol.registerFileProtocol('styles', (request, callback) => {
+        const assetPath = decodeURI(request.url.replace('styles://', ''));
+        callback({path: path.join(__dirname, 'styles', assetPath)});
+    });
+    
     
     //Install a menubar icon
     const iconPath = path.join(__dirname, 'assets', 'icon.png');
@@ -218,8 +154,6 @@ app.whenReady().then(() => {
     
     mcpServer = startMcp(MCP_PORT);
 
-    // createMainWindow();
-
     app.on('activate', function () {
         // On macOS it's common to re-create a window when the dock icon is clicked
         if (BrowserWindow.getAllWindows().length === 0) createMainWindow();
@@ -236,6 +170,21 @@ app.on('quit', () => {
         appServer.close();
     }
 });
+
+export async function injectWindow(name: string, json : string) {
+    console.log(`Injecting window: ${name}`);
+
+    const win = windows.get(name);
+    if (!win) {
+        console.warn('Window not found:', name);
+        return null;
+    }
+
+    console.log(`Found window: ${name}`);
+    await win.webContents.executeJavaScript(`window.setState(${json})`);
+
+    return JSON.stringify(json, null, 2);
+}
 
 export async function readWindow(name: string) {
     console.log(`Reading window: ${name}`);
@@ -255,6 +204,19 @@ export async function readWindow(name: string) {
 
 export function listWindows() {
     return Array.from(windows.keys());
+}
+
+// Reveal the file in the system's file manager
+export function showFile(selectedFile: string) {
+    const uploadsDir = getUploadsDir();
+    if (!selectedFile.startsWith(uploadsDir)) {
+        console.warn('Selected file is not in uploadsDir');
+        return;
+    }
+    const filepath = path.resolve(selectedFile);
+    console.log('Revealing file:', filepath);
+    // Reveal the file in the system's file manager
+    shell.showItemInFolder(filepath);
 }
 
 export function openFile(selectedFile: string) {
@@ -284,8 +246,12 @@ export function openFile(selectedFile: string) {
 }
 
 ipcMain.handle('open-file', async (_, selectedFile: string) => {
-    console.log('Selected file:', selectedFile);
     openFile(selectedFile);
+    return selectedFile;
+});
+
+ipcMain.handle('show-file', async (_, selectedFile: string) => {
+    showFile(selectedFile);
     return selectedFile;
 });
 
