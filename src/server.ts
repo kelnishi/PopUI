@@ -134,7 +134,7 @@ export function startMcp(port: number): SseServer {
         "This tool allows the host to create and display a shared user interface that can serve as a visual context layer for the conversation.\n" +
         "This tool allows the host to move beyond text-only interactions to create, collaborative experiences like games, visualization tools, control panels, " +
         "and other interactive interfaces where both parties can manipulate a shared visual context.\n" +
-        "The tool will return the model state of the user interface as a json object.",
+        "Once a user interface is shown, subsequent pop-ui tool calls in 'get' mode should be used to update the context state.",
         {
             name: z.string().describe(
                 "The name of the user interface. This name will be used to reference the user interface in all modes."
