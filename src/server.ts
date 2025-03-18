@@ -131,11 +131,13 @@ export function startMcp(port: number) : SseServer {
 
     mcpServer.tool(
         "pop-ui",
-        "Use this tool to create and display an interactive user interface or control panel.\n" +
+        "This tool allows the host to create and display a shared user interface that can serve as a visual context layer for the conversation.\n" +
+        "This tool allows the host to move beyond text-only interactions to create rich, collaborative experiences like games, visualization tools, control panels, " +
+        "and other interactive interfaces where both parties can participate in a shared visual context.\n"+
         "The tool will return the model state of the user interface as a json object.",
         {
             name: z.string().describe(
-                "The name of the user interface. This name will be used to reference the user interface in read-ui://{name}."
+                "The name of the user interface. This name will be used to reference the user interface in all modes."
             ),
             mode: z.enum(["show", "get", "set"]).optional().describe(
                 "The mode of operation for the user interface. Use " +
@@ -147,12 +149,14 @@ export function startMcp(port: number) : SseServer {
                 "The json model object to set the initial or updated state of the user interface."
             ),
             tsx: z.string().optional().describe(
-                "The react component to display in the electron BrowserWindow." +
+                "A react component to display in the electron BrowserWindow." +
                 "This component must be compatible with dynamic loading via babel. " +
-                "This component should set a function 'window.getState()' to get the current state of the user interface as a detailed json model object." +
-                "This component should set a function 'window.setState(json)' to set the current state of the user interface." +
-                "This component should use radix-ui and tailwind for good styling and alignment." +
-                "This component should use appropriate widgets for ranges, enumerations, and other selectable data."
+                "This component must set a function 'window.getState()' to get the current state of the user interface as a detailed json model object." +
+                "This component must set a function 'window.setState(json)' to set the current state of the user interface." +
+                "This component should use radix-ui and tailwindcss for good styling and alignment." +
+                "This component should use lucide-icons for icons." +
+                "This component should use appropriate widgets for ranges, enumerations, and other selectable data." +
+                "The model is only available via polling. The component should not have any submit, execute, or other actions that would require a host callback."
             ),
         },
         async ({name, mode, json, tsx}) => {
