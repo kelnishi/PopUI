@@ -129,6 +129,10 @@ const config = {
       package: 'twind',
       file: 'twind.umd.js'
     },
+    {
+      package: 'lucide/dist/umd',
+      file: 'lucide.js'
+    }
   ]
 };
 

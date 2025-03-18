@@ -59,7 +59,8 @@ function createNewWindowWithTSX(filenameWithoutExt : string, tsxFilePath: string
         width: 800,
         height: 600,
         webPreferences: {
-            nodeIntegration: false,
+            preload: path.join(__dirname, 'preload.js'),
+            nodeIntegration: true,
             contextIsolation: true,
         },
     });

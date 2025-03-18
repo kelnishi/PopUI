@@ -9,9 +9,13 @@
   <!-- Load local Babel Standalone -->
   <script src="assets://babel.min.js"></script>
 
+<!--  <script type="module" src="https://cdn.skypack.dev/twind/shim"></script>-->
   <script src="assets://twind.umd.js"></script>
 
   <link href="styles://output.css" rel="stylesheet">
+
+  <script src="assets://lucide.js"></script>
+  
 </head>
 <body>
 <div id="root"></div>
@@ -20,7 +24,7 @@
   ${tsxCode}
 </script>
 <script>
-
+  
 async function processTailwindJIT(componentCode) {
   try {
     // Get the twind objects from the window
@@ -87,14 +91,128 @@ async function renderDynamicComponent() {
       ['env', { modules: 'commonjs' }], // Transforms ES modules to CommonJS.
       'react',
       'typescript'
-    ]
+    ],
   });
 
   // Create a require function that returns React when asked for it.
   const requireFn = (moduleName) => {
-    if (moduleName === 'react') return React;
+    if (moduleName === 'react') {
+      return React;
+    }
+
+    if (moduleName === 'lucide-react') {
+      const lucideProxy = {};
+
+      // Get all icon names from window.lucide
+      const iconNames = Object.keys(window.lucide).filter(
+              // Filter out non-array entries or prototype properties
+              key => Array.isArray(window.lucide[key]) &&
+                      !key.startsWith('__') &&
+                      !key.startsWith('[[Prototype]]')
+      );
+
+      console.log(`Creating ${iconNames.length} Lucide icon components`);
+
+      // Create a component for each icon
+      iconNames.forEach(iconName => {
+        lucideProxy[iconName] = createSvgIconFromLucideData(iconName, window.lucide[iconName]);
+      });
+
+      return lucideProxy;
+    }
+
     throw new Error("Module not found: " + moduleName);
   };
+
+// Helper function to create an SVG component from Lucide icon data
+  function createSvgIconFromLucideData(iconName, iconData) {
+    return React.forwardRef((props, ref) => {
+      const {
+        color = 'currentColor',
+        size = 24,
+        strokeWidth = 2,
+        ...restProps
+      } = props;
+
+      return React.createElement(
+              'svg',
+              {
+                ref,
+                xmlns: 'http://www.w3.org/2000/svg',
+                width: size,
+                height: size,
+                viewBox: '0 0 24 24',
+                fill: 'none',
+                stroke: color,
+                strokeWidth,
+                strokeLinecap: 'round',
+                strokeLinejoin: 'round',
+                ...restProps
+              },
+              // Process each element in the icon data array
+              ...iconData.map((item, index) => {
+                // Based on the structure we see in the console:
+                // Each item is an array where first element is the element type (e.g. "path")
+                // and second element contains attributes
+                if (Array.isArray(item) && item.length >= 2) {
+                  const [elementType, attributes] = item;
+
+                  // Create the SVG element with its attributes
+                  return React.createElement(
+                          elementType,
+                          {
+                            key: `${iconName}-${index}`,
+                            ...processAttributes(attributes)
+                          }
+                  );
+                }
+
+                // Handle case where item is just a string (e.g. "path")
+                if (typeof item === 'string') {
+                  return React.createElement(
+                          item,
+                          { key: `${iconName}-${index}` }
+                  );
+                }
+
+                return null;
+              })
+      );
+    });
+  }
+
+// Helper to process attributes (handle the various formats seen in the console)
+  function processAttributes(attrs) {
+    if (!attrs) return {};
+
+    // If attrs is already an object, return it
+    if (typeof attrs === 'object' && !Array.isArray(attrs)) {
+      return attrs;
+    }
+
+    // If attrs is an array of key-value pairs like ["path", {...}]
+    if (Array.isArray(attrs) && attrs.length >= 2 && typeof attrs[1] === 'object') {
+      return attrs[1];
+    }
+
+    // If attrs is something else, try to make sense of it
+    const result = {};
+
+    // Handle case where we have [key, value] pairs
+    if (Array.isArray(attrs)) {
+      for (let i = 0; i < attrs.length; i += 2) {
+        if (i + 1 < attrs.length) {
+          const key = attrs[i];
+          const value = attrs[i + 1];
+          if (typeof key === 'string') {
+            result[key] = value;
+          }
+        }
+      }
+    }
+
+    return result;
+  }
 
   const module = { exports: {} };
   const exports = module.exports;

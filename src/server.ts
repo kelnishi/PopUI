@@ -154,7 +154,7 @@ export function startMcp(port: number) : SseServer {
                 "This component must set a function 'window.getState()' to get the current state of the user interface as a detailed json model object." +
                 "This component must set a function 'window.setState(json)' to set the current state of the user interface." +
                 "This component should use radix-ui and tailwindcss for good styling and alignment." +
-                "This component should use lucide-icons for icons." +
+                "This component should use lucide-react for icons." +
                 "This component should use appropriate widgets for ranges, enumerations, and other selectable data." +
                 "The model is only available via polling. The component should not have any submit, execute, or other actions that would require a host callback."
             ),
