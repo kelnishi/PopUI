@@ -53,8 +53,16 @@ function copyNodeModulesAssets(destDir, assets) {
   ensureDirectoryExists(destDir);
   
   assets.forEach(({ package, file, destName }) => {
-    const src = path.resolve(__dirname, 'node_modules', package, file);
-    const dest = path.join(destDir, destName || path.basename(file));
+    let src;
+    if (package.endsWith('.js')) {
+      // If package ends with .js, use it directly as the source file
+      src = path.resolve(__dirname, 'node_modules', package);
+    } else {
+      // Otherwise, append the file to the package path
+      src = path.resolve(__dirname, 'node_modules', package, file);
+    }
+    
+    const dest = path.join(destDir, destName || path.basename(file || package));
     copyFile(src, dest);
   });
 }
@@ -112,7 +120,15 @@ const config = {
     {
       package: 'react-dom/umd',
       file: 'react-dom.development.js'
-    }
+    },
+    {
+      package: 'postcss/lib',
+      file: 'postcss.js'
+    },
+    {
+      package: 'twind',
+      file: 'twind.umd.js'
+    },
   ]
 };
 

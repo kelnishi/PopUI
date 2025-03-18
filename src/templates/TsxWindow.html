@@ -9,6 +9,8 @@
   <!-- Load local Babel Standalone -->
   <script src="assets://babel.min.js"></script>
 
+  <script src="assets://twind.umd.js"></script>
+
   <link href="styles://output.css" rel="stylesheet">
 </head>
 <body>
@@ -18,8 +20,65 @@
   ${tsxCode}
 </script>
 <script>
+
+async function processTailwindJIT(componentCode) {
+  try {
+    // Get the twind objects from the window
+    const twind = window.twind;
+
+    // Create a virtual sheet manually since sheets.virtual() is not available
+    const sheet = {
+      target: '',
+      insert(rule) {
+        this.target += rule;
+      }
+    };
+
+    // Configure twind with the virtual sheet
+    twind.setup({
+      sheet,
+      preflight: true, // Include Tailwind's base styles
+      mode: 'silent',  // Don't warn about unknown classes
+      theme: {
+        extend: {}
+      }
+    });
+
+    // Extract all class names from the component
+    const classMatches = componentCode.match(/className="([^"]*)"/g) || [];
+    const allClasses = classMatches
+            .map(match => match.replace(/className="(.*)"/, '$1'))
+            .join(' ')
+            .split(/\s+/)
+            .filter(Boolean);
+
+    // Apply each class to force twind to generate the CSS
+    allClasses.forEach(className => {
+      twind.tw(className);
+    });
+
+    // Get the CSS content from the virtual sheet
+    const cssText = sheet.target;
+
+    // Return the CSS content
+    return cssText;
+  } catch (error) {
+    console.error('Error processing Twind styles:', error);
+    return '';
+  }
+}
+  
+async function renderDynamicComponent() {
   // Get the inline TSX code
   const sourceCode = document.getElementById('module-code').textContent;
+
+  // Generate JIT CSS for just this component
+  const componentCSS = await processTailwindJIT(sourceCode);
+
+  // Inject the CSS
+  const styleEl = document.createElement('style');
+  styleEl.textContent = componentCSS;
+  document.head.appendChild(styleEl);
 
   // Transform the code using Babel. We use the presets for React and TypeScript.
   const { code } = Babel.transform(sourceCode, {
@@ -80,6 +139,15 @@
       }
     }
   }
+}
 </script>
+
+<script>
+  // Wait for the DOM to be ready
+  document.addEventListener('DOMContentLoaded', async () => {
+    await renderDynamicComponent();
+  });
+</script>
+
 </body>
 </html>

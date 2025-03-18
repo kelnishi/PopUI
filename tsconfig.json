@@ -4,11 +4,13 @@
       "module": "commonjs",
       "moduleResolution": "node",
       "esModuleInterop": true,
+      "allowSyntheticDefaultImports": true,
       "sourceMap": true,
       "outDir": "dist",
       "strict": true,
       "jsx": "react",
-      "lib": ["DOM", "ES2020"]
+      "lib": ["DOM", "ES2020"],
+      "types": ["node"],
     },
     "include": ["src/**/*"]
   }
