@@ -1,7 +1,7 @@
 import express from 'express';
 import {Server} from 'http';
-import {McpServer, ResourceTemplate, ListResourcesCallback } from "@modelcontextprotocol/sdk/server/mcp.js";
-import {TextContent, ListResourcesResult } from "@modelcontextprotocol/sdk/types.js";
+import {McpServer, ResourceTemplate, ListResourcesCallback} from "@modelcontextprotocol/sdk/server/mcp.js";
+import {TextContent, ListResourcesResult} from "@modelcontextprotocol/sdk/types.js";
 
 import {SSEServerTransport} from "@modelcontextprotocol/sdk/server/sse.js";
 import {z} from "zod";
@@ -11,7 +11,7 @@ import {getUploadsDir} from './utils/paths';
 import path from 'path';
 import * as fs from "node:fs";
 
-import {openFile, readWindow, injectWindow, listWindows } from './main';
+import {openFile, readWindow, injectWindow, describeWindow, listWindows, listFiles} from './main';
 
 let serverInstance: Server | null = null;
 
@@ -117,7 +117,7 @@ export function startServer(port: number): Server {
 }
 
 //Get an SSE McpServer
-export function startMcp(port: number) : SseServer {
+export function startMcp(port: number): SseServer {
 
     const app = express();
 
@@ -125,80 +125,85 @@ export function startMcp(port: number) : SseServer {
     app.use(express.json({limit: '50mb'})); // Increased limit for larger files
 
     const mcpServer = new McpServer({
-        name: "PopToggle",
+        name: "PopUI",
         version: "1.0.0"
     });
 
     mcpServer.tool(
         "pop-ui",
         "This tool allows the host to create and display a shared user interface that can serve as a visual context layer for the conversation.\n" +
-        "This tool allows the host to move beyond text-only interactions to create rich, collaborative experiences like games, visualization tools, control panels, " +
-        "and other interactive interfaces where both parties can participate in a shared visual context.\n"+
+        "This tool allows the host to move beyond text-only interactions to create, collaborative experiences like games, visualization tools, control panels, " +
+        "and other interactive interfaces where both parties can manipulate a shared visual context.\n" +
         "The tool will return the model state of the user interface as a json object.",
         {
             name: z.string().describe(
                 "The name of the user interface. This name will be used to reference the user interface in all modes."
             ),
-            mode: z.enum(["show", "get", "set"]).optional().describe(
-                "The mode of operation for the user interface. Use " +
-                "'show' to create and show a new user interface, " +
-                "'get' to read the current model state of a user interface, and " +
-                "'set' to inject a model state into a user interface."
+            mode: z.enum(["show", "get", "set", "describe"]).optional().describe(
+                "The mode of operation for the user interface. Use:" +
+                "'show' to show a user interface (create/update by passing tsx or show an existing from ui://list)\n" +
+                "'get' to read the current model state of a user interface\n" +
+                "'set' to inject a model state into a user interface\n" +
+                "'describe' to get the schema of the json model object."
             ),
             json: z.string().optional().describe(
-                "The json model object to set the initial or updated state of the user interface."
+                "The json model object to set the initial or updated state of the user interface. Valid for modes 'set' and 'show'."
             ),
             tsx: z.string().optional().describe(
-                "A react component to display in the electron BrowserWindow." +
-                "This component must be compatible with dynamic loading via babel. " +
-                "This component must set a function 'window.getState()' to get the current state of the user interface as a detailed json model object." +
-                "This component must set a function 'window.setState(json)' to set the current state of the user interface." +
-                "This component should use radix-ui and tailwindcss for good styling and alignment." +
-                "This component should use lucide-react for icons." +
-                "This component should use appropriate widgets for ranges, enumerations, and other selectable data." +
-                "The model is only available via polling. The component should not have any submit, execute, or other actions that would require a host callback."
+                "A react component to display in the electron BrowserWindow.\n" +
+                "This component must be compatible with dynamic loading via babel.\n" +
+                "This component must set a function 'window.getState()' to get the current state of the user interface as a detailed json model object.\n" +
+                "This component must set a function 'window.setState(json)' to set the current state of the user interface.\n" +
+                "This component must set a function 'window.describeState()' to get the schema of the json model object.\n" +
+                "This component should use tailwindcss for good styling and alignment.\n" +
+                "This component should use lucide-react for icons, including empty space icons.\n" +
+                "This component should use appropriate widgets for ranges, enumerations, and other selectable data.\n" +
+                "This component may be updated with subsequent calls to pop-ui in 'set' mode.\n"
             ),
         },
         async ({name, mode, json, tsx}) => {
             const fileName = `${name}.tsx`;
             const filePath = path.join(uploadsDir, fileName);
-            
+
             if (mode === "show") {
-                if (tsx === undefined) {
-                    //Error: tsx is required
+                let windowState = await readWindow(name as string);
+
+                if (tsx === undefined && windowState === null) {
                     return {
                         content: [
                             {
                                 type: "text",
-                                text: `tsx is required when mode is show.`
+                                text: `tsx is required when mode is show and window does not exist.`
                             } as TextContent
                         ],
                         isError: true
                     }
                 }
                 
-                //Save the tsx file to the uploads directory
-                await fs.promises.writeFile(filePath, tsx);
-                //Signal the app to open the file
+                if (tsx !== undefined) {
+                    //Save the tsx file to the uploads directory
+                    await fs.promises.writeFile(filePath, tsx);
+                    
+                    mcpServer.server.notification({
+                        method: "notifications/resources/list_changed",
+                    });
+                }
+                else if (json !== undefined) {
+                    windowState = await injectWindow(name as string, json as string);
+                }
+                
                 openFile(filePath);
-
-                mcpServer.server.notification({
-                    method: "notifications/resources/list_changed",
-                });
 
                 return {
                     content: [
                         {
                             type: "text",
-                            text: `User interface named "${name}" created and shown. Use read-ui://${name} to retrieve the user interface data and state.`
+                            text: `${windowState}`
                         } as TextContent
                     ],
                     isError: false
                 }
             }
-            // if (mode === "update") {
-            //    
-            // }
             if (mode === "set") {
                 const windowState = await injectWindow(name as string, json as string);
 
@@ -214,7 +219,7 @@ export function startMcp(port: number) : SseServer {
                         isError: true
                     }
                 }
-                
+
                 return {
                     content: [
                         {
@@ -228,7 +233,7 @@ export function startMcp(port: number) : SseServer {
             if (mode === "get") {
                 //Save the tsx file to the uploads directory
                 const windowState = await readWindow(name as string);
-                
+
                 if (windowState === null) {
                     //Error: window not found
                     return {
@@ -252,7 +257,34 @@ export function startMcp(port: number) : SseServer {
                     isError: false
                 }
             }
-            
+            if (mode === "describe") {
+                //Save the tsx file to the uploads directory
+                const windowState = await describeWindow(name as string);
+
+                if (windowState === null) {
+                    //Error: window not found
+                    return {
+                        content: [
+                            {
+                                type: "text",
+                                text: `User interface named "${name}" not found.`
+                            } as TextContent
+                        ],
+                        isError: true
+                    }
+                }
+
+                return {
+                    content: [
+                        {
+                            type: "text",
+                            text: `${windowState}`
+                        } as TextContent
+                    ],
+                    isError: false
+                }
+            }
+
             //Return invalid mode
             return {
                 content: [
@@ -265,41 +297,21 @@ export function startMcp(port: number) : SseServer {
             }
         }
     );
-    
-    const listResourcesCallback: ListResourcesCallback = (extra): ListResourcesResult => {
-        // Get all window names from the windows Map
-        const windowNames = listWindows();
 
-        // Convert them to resources in the required format
-        const resources = windowNames.map(windowName => {
-            return {
-                uri: "read-ui://" + windowName,
-                id: windowName,
-                name: windowName, // You could enhance this with more descriptive names if needed
-                type: 'window',    // Specify the type as 'window'
-                // Add any other required properties based on the resource schema
-                metadata: {
-                    createdAt: new Date().toISOString(),
-                    // Add any other metadata you'd like to include
-                }
-            };
-        });
-
-        return {
-            resources: resources
-        };
-    };
-    
     mcpServer.resource(
-        "read-ui",
-        new ResourceTemplate("read-ui://{name}", { list: listResourcesCallback }),
-        async (uri, { name }) => {
-            const windowState = await readWindow(name as string);
-            
+        "ui/list",
+        "ui://list",
+        async (uri) => {
+            const files = await listFiles();
+            //Convert to a json array of .tsx filenames without extensions
+            const windowNames = files
+                .filter(fileName => path.extname(fileName) === '.tsx')
+                .map(fileName => path.basename(fileName, '.tsx'));
+
             return {
                 contents: [{
                     uri: uri.href,
-                    text: `${windowState}`
+                    text: `${JSON.stringify(windowNames, null, 2)}`
                 }]
             }
         }
@@ -337,7 +349,7 @@ export function startMcp(port: number) : SseServer {
 
             // Check if we have any connections first
             if (transports.size === 0) {
-                return res.status(503).json({ error: "No active SSE connections" });
+                return res.status(503).json({error: "No active SSE connections"});
             }
 
             // Try to get sessionId from various possible locations
@@ -361,7 +373,7 @@ export function startMcp(port: number) : SseServer {
             // If we found a sessionId and it exists in our connections
             if (sessionId && transports.has(sessionId)) {
                 console.log(`Using specified session ID: ${sessionId}`);
-                const transport : SSEServerTransport = transports.get(sessionId);
+                const transport: SSEServerTransport = transports.get(sessionId);
                 await transport.handlePostMessage(req, res, parsedBody);
             }
             // Otherwise, use the first available connection
@@ -373,7 +385,7 @@ export function startMcp(port: number) : SseServer {
             }
         } catch (error) {
             console.error("Error handling POST message:", error);
-            res.status(500).json({ error: error });
+            res.status(500).json({error: error});
         }
     });
 
@@ -381,9 +393,9 @@ export function startMcp(port: number) : SseServer {
     serverInstance = app.listen(port, () => {
         console.log(`Server is running at http://localhost:${port}`);
     });
-    
+
     return {
-        server: serverInstance, 
+        server: serverInstance,
         transports: transports,
         mcp: mcpServer
     };

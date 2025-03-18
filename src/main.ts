@@ -203,8 +203,29 @@ export async function readWindow(name: string) {
     return JSON.stringify(state, null, 2);
 }
 
+export async function describeWindow(name: string) {
+    console.log(`Describing window: ${name}`);
+
+    const win = windows.get(name);
+    if (!win) {
+        console.warn('Window not found:', name);
+        return null;
+    }
+
+    console.log(`Found window: ${name}`);
+    // Execute the describeState method on the component instance
+    const state = await win.webContents.executeJavaScript('window.describeState()');
+
+    return JSON.stringify(state, null, 2);
+}
+
 export function listWindows() {
     return Array.from(windows.keys());
+}
+
+export function listFiles() {
+    const uploadsDir = getUploadsDir();
+    return fs.readdirSync(uploadsDir);
 }
 
 // Reveal the file in the system's file manager
