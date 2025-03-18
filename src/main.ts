@@ -68,19 +68,20 @@ function createNewWindowWithTSX(filenameWithoutExt : string, tsxFilePath: string
     newWin.webContents.on('did-finish-load', async () => {
         // Measure the maximum width and height of the document
         const { width, height } = await newWin.webContents.executeJavaScript(`
-    ({
-      width: Math.max(
-        document.documentElement.clientWidth,
-        document.documentElement.scrollWidth,
-        document.body ? document.body.scrollWidth : 0
-      ),
-      height: Math.max(
-        document.documentElement.clientHeight,
-        document.documentElement.scrollHeight,
-        document.body ? document.body.scrollHeight : 0
-      )
-    })
-  `);
+(() => {
+    // Wait for the component to be rendered
+    const rootElement = document.getElementById('dynamic-component-container').children[0] || document.getElementById('root') || document.body;
+    
+    // Get the actual rendered component's size
+    const rect = rootElement.getBoundingClientRect();
+    
+    return {
+        width: Math.ceil(rect.width),
+        height: Math.ceil(rect.height)
+    };
+})()`
+        );
+        
         // Update the window's content size
         newWin.setContentSize(width, height);
     });
@@ -96,7 +97,7 @@ function showDropdownWindow() {
             width: 600,
             height: 800,
             frame: false,
-            resizable: false,
+            resizable: true,
             show: false,
             transparent: false,
             webPreferences: {

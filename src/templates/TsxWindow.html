@@ -262,23 +262,25 @@ async function renderDynamicComponent() {
       if (isClassComponent) {
         // For class components, we can use refs
         root.render(
-                React.createElement(Component, {
-                  ref: (instance) => {
-                    window.myComponent = instance;
-                  }
-                })
+          React.createElement('div', 
+            { id: 'dynamic-component-container' },
+            React.createElement(Component, {
+              ref: (instance) => {
+                window.dynamicComponent = instance;
+              }
+            })
+          )
         );
       } else {
         // For function components, don't use refs
+        const componentElement = React.createElement(Component, {});
+        window.dynamicComponent = componentElement;
         root.render(
-                React.createElement(Component, {})
+          React.createElement('div', 
+            { id: 'dynamic-component-container' },
+            componentElement
+          )
         );
-
-        // Alternative approach if you need window access:
-        window.myComponent = { getState: () => {} }; // Stub implementation
-
-        // You could patch this later if the component exports state methods
-        // through props or context
       }
     }
   }

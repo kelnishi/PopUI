@@ -137,7 +137,9 @@ export function startMcp(port: number): SseServer {
         "Once a user interface is shown, subsequent pop-ui tool calls in 'get' mode should be used to update the context state.",
         {
             name: z.string().describe(
-                "The name of the user interface. This name will be used to reference the user interface in all modes."
+                "The name of the user interface.\n" +
+                "This name will be used to reference the user interface in all modes.\n" +
+                "This parameter is required."
             ),
             mode: z.enum(["show", "get", "set", "describe"]).optional().describe(
                 "The mode of operation for the user interface. Use:" +
@@ -152,9 +154,11 @@ export function startMcp(port: number): SseServer {
             tsx: z.string().optional().describe(
                 "A react component to display in the electron BrowserWindow.\n" +
                 "This component must be compatible with dynamic loading via babel.\n" +
+                "This component is a single reference and must be entirely self contained.\n" +
                 "This component must set a function 'window.getState()' to get the current state of the user interface as a detailed json model object.\n" +
                 "This component must set a function 'window.setState(json)' to set the current state of the user interface.\n" +
                 "This component must set a function 'window.describeState()' to get the schema of the json model object.\n" +
+                "This component should have preferred dimensions in its element styling.\n" +
                 "This component should use tailwindcss for good styling and alignment.\n" +
                 "This component should use lucide-react for icons, including empty space icons.\n" +
                 "This component should use appropriate widgets for ranges, enumerations, and other selectable data.\n" +
