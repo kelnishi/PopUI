@@ -48,17 +48,42 @@ async function processTailwindJIT(componentCode) {
       }
     });
 
-    // Extract all class names from the component
-    const classMatches = componentCode.match(/className="([^"]*)"/g) || [];
-    const allClasses = classMatches
-            .map(match => match.replace(/className="(.*)"/, '$1'))
-            .join(' ')
-            .split(/\s+/)
-            .filter(Boolean);
+    // Use a regex that matches both static (double-quoted) and template literal (backtick) className values
+    const regex = /className=(?:"([^"]*)"|\{`([^`]*)`\})/g;
+    let allClasses = [];
+    let match;
+    while ((match = regex.exec(componentCode)) !== null) {
+      // Use group 1 for static strings or group 2 for template literals
+      let classStr = match[1] || match[2] || '';
+      
+      // Extract dynamic tokens from interpolations (e.g. ${...})
+      let dynamicTokens = [];
+      const interpolationRegex = /\$\{([^}]+)\}/g;
+      let dynamicMatch;
+      while ((dynamicMatch = interpolationRegex.exec(classStr)) !== null) {
+        let token = dynamicMatch[1].trim();
+      // Split by whitespace in case the expression yields multiple tokens and remove surrounding quotes from each token
+      dynamicTokens.push(...token.split(/\s+/).map(tok => tok.replace(/^['"]+|['"]+$/g, '')));
+      }
+      
+      // Remove interpolated expressions from the static part
+      classStr = classStr.replace(/\$\{[^}]+}/g, '').trim();
+      let staticTokens = classStr ? classStr.split(/\s+/) : [];
+      
+      // Combine both static and dynamic tokens
+      const tokens = staticTokens.concat(dynamicTokens);
+      if (tokens.length > 0) {
+        allClasses.push(...tokens);
+      }
+    }
 
-    // Apply each class to force twind to generate the CSS
-    allClasses.forEach(className => {
-      twind.tw(className);
+    // Apply each token with twind; ignore any failures
+    allClasses.forEach(token => {
+      try {
+        twind.tw(token);
+      } catch (e) {
+        // Ignore tokens that fail to compile
+      }
     });
 
     // Get the CSS content from the virtual sheet
