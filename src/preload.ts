@@ -20,8 +20,11 @@ if (contextBridge && ipcRenderer) {
     showFile: (filename: string) => {
       console.log(`Preload: showFile ${filename}`);
       return ipcRenderer.invoke('show-file', filename);
+    },
+
+    sendToHost: (message: string) => {
+      return ipcRenderer.invoke('send-to-host', message);
     }
-    
   });
 } else {
   console.error('Electron APIs not available in preload script');

@@ -1,9 +1,10 @@
-import {app, BrowserWindow, ipcMain, nativeImage, protocol, Tray, shell } from 'electron';
+import {app, BrowserWindow, ipcMain, nativeImage, protocol, shell, Tray} from 'electron';
 import * as fs from 'fs';
 import * as path from 'path';
 import {SseServer, startMcp, startServer} from './server';
 import {Server} from "http";
 import {getUploadsDir} from './utils/paths';
+import {sendToClaude} from './shell';
 
 let appServer: Server | null;
 let mcpServer: SseServer | null;
@@ -193,6 +194,21 @@ export async function readWindow(name: string) {
     
     const win = windows.get(name);
     if (!win) {
+        const filename = path.join(getUploadsDir(), `${name}.tsx`);
+        
+        if (fs.existsSync(filename)) {
+            console.log(`Found window file: ${name}`);
+            const newWin = await openFile(filename);
+            
+            if (!newWin) {
+                console.warn('Invalid window:', name);
+                return null;
+            }
+            
+            const state = await newWin.webContents.executeJavaScript('window.getState()');
+            return JSON.stringify(state, null, 2);
+        }
+        
         console.warn('Window not found:', name);
         return null;
     }
@@ -242,7 +258,7 @@ export function showFile(selectedFile: string) {
     shell.showItemInFolder(filepath);
 }
 
-export function openFile(selectedFile: string) {
+export function openFile(selectedFile: string) : BrowserWindow | undefined {
     const uploadsDir = getUploadsDir();
     if (!selectedFile.startsWith(uploadsDir)) {
         console.warn('Selected file is not in uploadsDir');
@@ -266,6 +282,8 @@ export function openFile(selectedFile: string) {
     
     //Save the window to a global map
     windows.set(filenameWithoutExt, newWin);
+    
+    return newWin;
 }
 
 ipcMain.handle('open-file', async (_, selectedFile: string) => {
@@ -276,6 +294,11 @@ ipcMain.handle('open-file', async (_, selectedFile: string) => {
 ipcMain.handle('show-file', async (_, selectedFile: string) => {
     showFile(selectedFile);
     return selectedFile;
+});
+
+ipcMain.handle('send-to-host', async (_, message: string) => {
+    console.log("Sending message to host:", message);
+    return await sendToClaude(message);
 });
 
 // Handle IPC requests from renderer to server

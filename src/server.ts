@@ -158,9 +158,15 @@ export function startMcp(port: number): SseServer {
                 "This component must set a function 'window.getState()' to get the current state of the user interface as a detailed json model object.\n" +
                 "This component must set a function 'window.setState(json)' to set the current state of the user interface.\n" +
                 "This component must set a function 'window.describeState()' to get the schema of the json model object.\n" +
+                "This component can send messages to the host with 'window.api.sendToHost(text)'.\n" +
+                "- Use this method with submit buttons and action elements to automatically send messages on behalf of the user\n" +
+                "- For interactive elements like buttons, forms, and selectors, implement 'sendToHost' in the onClick/onSubmit handlers to communicate user selections back to the conversation\n" +
+                "- When a user performs an action in the UI, use 'window.api.sendToHost(text)' to reflect that action in the conversation context without requiring the user to type a response\n" +
+                "- Example: A \"Submit\" button should call 'window.api.sendToHost(\"Form submitted with value: \" + value)' to automatically send the form result\n" +
+                "- User interfaces like forms or games should have explicit buttons at the bottom for the user to indicate submission.\n" +
                 "This component should have preferred dimensions in its element styling.\n" +
                 "This component should use tailwindcss for good styling and alignment.\n" +
-                "This component should use lucide-react for icons, including empty space icons.\n" +
+                "This component should use unicode emoji or lucide-react for icons, including empty space icons.\n" +
                 "This component should use appropriate widgets for ranges, enumerations, and other selectable data.\n" +
                 "This component may be updated with subsequent calls to pop-ui in 'set' mode.\n"
             ),
@@ -346,10 +352,7 @@ export function startMcp(port: number): SseServer {
     app.post("/messages", async (req, res) => {
         try {
             // Debug logging to see what's being received
-            console.log("Received POST to /messages", {
-                body: req.body,
-                headers: req.headers
-            });
+            console.log("Received POST to /messages", req.body);
 
             // Check if we have any connections first
             if (transports.size === 0) {
