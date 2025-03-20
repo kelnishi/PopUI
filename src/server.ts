@@ -335,12 +335,27 @@ export function startMcp(port: number): SseServer {
 
         // Store it in the map using the session ID that's created in the constructor
         transports.set(transport.sessionId, transport);
+        req.socket.setTimeout(0);
+
+        const heartbeat = setInterval(() => {
+            // A colon indicates a comment in SSE.
+            res.write(":\n\n");
+        }, 15000);
+        
+        req.on('close', () => {
+            console.log(`Client Connection ${transport.sessionId} closed`);
+            clearInterval(heartbeat);
+            transport.close();
+            transports.delete(transport.sessionId);
+        });
 
         // Handle connection close
         res.on('close', () => {
-            transports.delete(transport.sessionId);
             console.log(`Connection ${transport.sessionId} closed`);
+            clearInterval(heartbeat);
+            transports.delete(transport.sessionId);
         });
+        res.cookie("x-session-id", transport.sessionId, { httpOnly: true, secure: true, sameSite: "strict" });
 
         // Connect to MCP server
         await mcpServer.connect(transport);
@@ -365,30 +380,33 @@ export function startMcp(port: number): SseServer {
             // 1. Check if it's in the body
             if (req.body && req.body.sessionId) {
                 sessionId = req.body.sessionId;
+                console.log('Body sessionId:', sessionId);
             }
             // 2. Check if it's in a custom header
             else if (req.headers['x-session-id']) {
                 sessionId = req.headers['x-session-id'];
+                console.log('Header sessionId:', sessionId);
             }
             // 3. Check if it's in the URL query parameters
             else if (req.query.sessionId) {
                 sessionId = req.query.sessionId;
+                console.log('Query sessionId:', sessionId);
             }
 
             const parsedBody = req.body;
 
             // If we found a sessionId and it exists in our connections
-            if (sessionId && transports.has(sessionId)) {
-                console.log(`Using specified session ID: ${sessionId}`);
-                const transport: SSEServerTransport = transports.get(sessionId);
-                await transport.handlePostMessage(req, res, parsedBody);
-            }
-            // Otherwise, use the first available connection
-            else {
-                console.log("No valid session ID found, using first available connection");
-                const [firstSessionId, transport] = [...transports.entries()][0];
-                console.log(`Using first available session ID: ${firstSessionId}`);
-                await transport.handlePostMessage(req, res, parsedBody);
+            if (sessionId) {
+                if (transports.has(sessionId)){
+                    console.log(`Using specified session ID: ${sessionId}`);
+                    const transport: SSEServerTransport = transports.get(sessionId);
+                    await transport.handlePostMessage(req, res, parsedBody);
+                }
+                else 
+                {
+                    console.log(`Session ID ${sessionId} not found in active connections. Sending 400.`);
+                    return res.status(400).send("SSE connection not active. Please reconnect.");
+                }
             }
         } catch (error) {
             console.error("Error handling POST message:", error);
