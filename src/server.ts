@@ -195,6 +195,7 @@ export function startMcp(port: number): SseServer {
                     //Save the tsx file to the uploads directory
                     await fs.promises.writeFile(filePath, tsx);
                     
+                    openFile(filePath);
                     // mcpServer.server.notification({
                     //     method: "notifications/resources/list_changed",
                     // });
@@ -203,8 +204,6 @@ export function startMcp(port: number): SseServer {
                     windowState = await injectWindow(name as string, json as string);
                 }
                 
-                openFile(filePath);
-
                 return {
                     content: [
                         {
