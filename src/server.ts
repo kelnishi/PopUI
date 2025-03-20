@@ -11,7 +11,7 @@ import {getUploadsDir} from './utils/paths';
 import path from 'path';
 import * as fs from "node:fs";
 
-import {openFile, readWindow, injectWindow, describeWindow, listWindows, listFiles} from './main';
+import {openFile, readWindow, closeWindow, injectWindow, describeWindow, listWindows, listFiles} from './main';
 
 let serverInstance: Server | null = null;
 
@@ -158,17 +158,17 @@ export function startMcp(port: number): SseServer {
                 "This component must set a function 'window.getState()' to get the current state of the user interface as a detailed json model object.\n" +
                 "This component must set a function 'window.setState(json)' to set the current state of the user interface.\n" +
                 "This component must set a function 'window.describeState()' to get the schema of the json model object.\n" +
-                "This component can send messages to the host with 'window.api.sendToHost(text)'.\n" +
-                "- Use this method with submit buttons and action elements to automatically send messages on behalf of the user\n" +
-                "- For interactive elements like buttons, forms, and selectors, implement 'sendToHost' in the onClick/onSubmit handlers to communicate user selections back to the conversation\n" +
-                "- When a user performs an action in the UI, use 'window.api.sendToHost(text)' to reflect that action in the conversation context without requiring the user to type a response\n" +
-                "- Example: A \"Submit\" button should call 'window.api.sendToHost(\"Form submitted with value: \" + value)' to automatically send the form result\n" +
-                "- User interfaces like forms or games should have explicit buttons at the bottom for the user to indicate submission.\n" +
+                "This component may send chat messages to the host with 'window.api.sendToHost(message)'.\n" +
+                "- Use this method with submit/confirm buttons and action elements to prompt the host on behalf of the user.\n" +
+                "- Do not use this method for interactive elements within the user interface; it should only be used as a final submit button.\n" +
+                "- Example: A \"Confirm choice\" button should call 'window.api.sendToHost(\"Selection made.\")' to prompt the host to read the user interface state.\n" +
+                "- Example: In a game, a button \"Done\" should call 'window.api.sendToHost(\"Your turn.\")' to prompt the host to read the state and make the next move.\n" +
                 "This component should have preferred dimensions in its element styling.\n" +
                 "This component should use tailwindcss for good styling and alignment.\n" +
                 "This component should use unicode emoji or lucide-react for icons, including empty space icons.\n" +
                 "This component should use appropriate widgets for ranges, enumerations, and other selectable data.\n" +
-                "This component may be updated with subsequent calls to pop-ui in 'set' mode.\n"
+                "This component may be updated with subsequent calls to pop-ui in 'set' mode.\n" +
+                "The host should proactively get the current state of the user interface with subsequent calls to pop-ui in 'get' mode."
             ),
         },
         async ({name, mode, json, tsx}) => {
@@ -191,12 +191,13 @@ export function startMcp(port: number): SseServer {
                 }
                 
                 if (tsx !== undefined) {
+                    await closeWindow(name as string);
                     //Save the tsx file to the uploads directory
                     await fs.promises.writeFile(filePath, tsx);
                     
-                    mcpServer.server.notification({
-                        method: "notifications/resources/list_changed",
-                    });
+                    // mcpServer.server.notification({
+                    //     method: "notifications/resources/list_changed",
+                    // });
                 }
                 else if (json !== undefined) {
                     windowState = await injectWindow(name as string, json as string);

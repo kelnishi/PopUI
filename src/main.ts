@@ -220,6 +220,17 @@ export async function readWindow(name: string) {
     return JSON.stringify(state, null, 2);
 }
 
+export async function closeWindow(name: string) {
+    const win = windows.get(name);
+    if (win) {
+        win.close();
+        windows.delete(name);
+    }
+
+    console.log(`Window closed: ${name}`);
+    return name;
+}
+
 export async function describeWindow(name: string) {
     console.log(`Describing window: ${name}`);
 
