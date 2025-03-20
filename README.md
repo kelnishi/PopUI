@@ -1,7 +1,7 @@
-# PopToggle
+# popui
 
 ## Overview
-PopToggle is an Electron application that enables an MCP-enabled host to create a user interface to be used as a data source.
+popui is an Electron application that enables an MCP-enabled host to create a user interface to be used as a data source.
 
 ## Features
 - Managed MCP server on port 3002
@@ -18,7 +18,7 @@ Add a supergateway proxy to your claude_desktop_config.json file.
 ```json
 {
     "mcpServers": {
-        "poptoggle": {
+        "popui": {
             "command": "npx",
             "args": [
                 "-y",
