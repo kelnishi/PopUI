@@ -51,7 +51,7 @@ function createNewWindowWithTSX(filenameWithoutExt : string, tsxFilePath: string
     const htmlTemplate = fs.readFileSync(path.join(__dirname, 'templates', 'TsxWindow.html'), 'utf-8');
     const htmlContent = htmlTemplate
         .replace('${tsxCode}', tsxCode)
-        .replace('${filename}', filename);
+        .replace('${filename}', filenameWithoutExt);
     
     const tempHtmlPath = path.join(app.getPath('temp'), filenameWithoutExt+'.html');
     fs.writeFileSync(tempHtmlPath, htmlContent, 'utf-8');
@@ -136,11 +136,25 @@ app.whenReady().then(() => {
     
     
     //Install a menubar icon
+    const trayIcon = nativeImage.createEmpty();
     const iconPath = path.join(__dirname, 'assets', 'icon.png');
-    console.log(`Loading tray icon from ${iconPath}`);
-    const trayIcon = nativeImage.createFromPath(iconPath);
-    trayIcon.setTemplateImage(true);
-    tray = new Tray(trayIcon);
+    const icon2xPath = path.join(__dirname, 'assets', 'icon@2x.png');
+    
+    trayIcon.addRepresentation({
+        scaleFactor: 1,
+        width: 22,
+        height: 22,
+        buffer: fs.readFileSync(iconPath)
+    });
+    trayIcon.addRepresentation({
+        scaleFactor: 2,
+        width: 44,
+        height: 44,
+        buffer: fs.readFileSync(icon2xPath)
+    });
+
+// Create the tray with the composite image
+    const tray = new Tray(trayIcon);
     
     tray.on('click', () => {
         if (dropdownWindow && dropdownWindow.isVisible()) {
