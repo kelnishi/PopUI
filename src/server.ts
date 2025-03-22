@@ -141,12 +141,13 @@ export function startMcp(port: number): SseServer {
                 "This name will be used to reference the user interface in all modes.\n" +
                 "This parameter is required."
             ),
-            mode: z.enum(["show", "get", "set", "describe"]).optional().describe(
+            mode: z.enum(["show", "get", "set", "describe", "list"]).optional().describe(
                 "The mode of operation for the user interface. Use:" +
-                "'show' to show a user interface (create/update by passing tsx or show an existing from ui://list)\n" +
+                "'show' to show a user interface (create/update by passing tsx or show an existing)\n" +
                 "'get' to read the current model state of a user interface\n" +
                 "'set' to inject a model state into a user interface\n" +
-                "'describe' to get the schema of the json model object."
+                "'describe' to get the schema of the json model object\n" +
+                "'list' to list existing user interfaces\n"
             ),
             json: z.string().optional().describe(
                 "The json model object to set the initial or updated state of the user interface. Valid for modes 'set' and 'show'."
@@ -163,12 +164,12 @@ export function startMcp(port: number): SseServer {
                 "- Do not use this method for interactive elements within the user interface; it should only be used as a final submit button.\n" +
                 "- Example: A \"Confirm choice\" button should call 'window.api.sendToHost(\"Selection made.\")' to prompt the host to read the user interface state.\n" +
                 "- Example: In a game, a button \"Done\" should call 'window.api.sendToHost(\"Your turn.\")' to prompt the host to read the state and make the next move.\n" +
-                "This component should have preferred dimensions in its element styling.\n" +
                 "This component should use tailwindcss for good styling and alignment.\n" +
-                "This component should use unicode emoji or lucide-react for icons, including empty space icons.\n" +
+                "This component container should have a preferred layout size, use tailwindcss w-number h-number.\n" +
+                "This component should use unicode emoji and/or lucide-react for icons, including empty space icons.\n" +
                 "This component should use appropriate widgets for ranges, enumerations, and other selectable data.\n" +
                 "This component may be updated with subsequent calls to pop-ui in 'set' mode.\n" +
-                "The host should proactively get the current state of the user interface with subsequent calls to pop-ui in 'get' mode."
+                "The host should *proactively* get the current state of the user interface with subsequent calls to pop-ui in 'get' mode."
             ),
         },
         async ({name, mode, json, tsx}) => {
@@ -294,6 +295,23 @@ export function startMcp(port: number): SseServer {
                     isError: false
                 }
             }
+            if (mode === "list") {
+                const files = await listFiles();
+                //Convert to a json array of .tsx filenames without extensions
+                const windowNames = files
+                    .filter(fileName => path.extname(fileName) === '.tsx')
+                    .map(fileName => path.basename(fileName, '.tsx'));
+
+                return {
+                    content: [
+                        {
+                            type: "text",
+                            text: JSON.stringify(windowNames, null, 2)
+                        } as TextContent
+                    ],
+                    isError: false
+                }
+            }
 
             //Return invalid mode
             return {
@@ -304,25 +322,6 @@ export function startMcp(port: number): SseServer {
                     } as TextContent
                 ],
                 isError: true
-            }
-        }
-    );
-
-    mcpServer.resource(
-        "ui/list",
-        "ui://list",
-        async (uri) => {
-            const files = await listFiles();
-            //Convert to a json array of .tsx filenames without extensions
-            const windowNames = files
-                .filter(fileName => path.extname(fileName) === '.tsx')
-                .map(fileName => path.basename(fileName, '.tsx'));
-
-            return {
-                contents: [{
-                    uri: uri.href,
-                    text: `${JSON.stringify(windowNames, null, 2)}`
-                }]
             }
         }
     );
