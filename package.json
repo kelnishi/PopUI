@@ -7,7 +7,7 @@
     "name": "Kelvin Nishikawa",
     "email": "kelnishiplays@gmail.com"
   },
-  "main": ".webpack/main",
+  "main": "./.webpack/main",
   "workspaces": [
     "src/templates/*"
   ],

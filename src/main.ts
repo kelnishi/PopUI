@@ -13,8 +13,8 @@ let mainWindow: BrowserWindow | null = null;
 const PORT = 3001;
 const MCP_PORT = 3002;
 
-let tray : Tray | null;
-let dropdownWindow : BrowserWindow | null;
+let tray: Tray | null;
+let dropdownWindow: BrowserWindow | null;
 
 let windows = new Map<string, BrowserWindow>();
 
@@ -40,20 +40,20 @@ function createMainWindow() {
 }
 
 // In the createNewWindowWithTSX function, update the asset URLs to use the custom protocol:
-function createNewWindowWithTSX(filenameWithoutExt : string, tsxFilePath: string) : BrowserWindow {
+function createNewWindowWithTSX(filenameWithoutExt: string, tsxFilePath: string): BrowserWindow {
     // Read the TSX file
     const tsxCode = fs.readFileSync(tsxFilePath, 'utf-8');
 
     const filename = path.basename(tsxFilePath);
-    
+
     // Apply the local variables to the TsxWindow.html template file.
     // ${tsxCode} and ${filename} are placeholders in the template file.
     const htmlTemplate = fs.readFileSync(path.join(__dirname, '../templates', 'TsxWindow.html'), 'utf-8');
     const htmlContent = htmlTemplate
         .replace('${tsxCode}', tsxCode)
         .replace('${filename}', filenameWithoutExt);
-    
-    const tempHtmlPath = path.join(app.getPath('temp'), filenameWithoutExt+'.html');
+
+    const tempHtmlPath = path.join(app.getPath('temp'), filenameWithoutExt + '.html');
     fs.writeFileSync(tempHtmlPath, htmlContent, 'utf-8');
 
     const newWin = new BrowserWindow({
@@ -68,7 +68,7 @@ function createNewWindowWithTSX(filenameWithoutExt : string, tsxFilePath: string
 
     newWin.webContents.on('did-finish-load', async () => {
         // Measure the maximum width and height of the document
-        const { width, height } = await newWin.webContents.executeJavaScript(`
+        const {width, height} = await newWin.webContents.executeJavaScript(`
 (() => {
     // Wait for the component to be rendered
     const rootElement = document.getElementById('dynamic-component-container').children[0] || document.getElementById('root') || document.body;
@@ -82,13 +82,13 @@ function createNewWindowWithTSX(filenameWithoutExt : string, tsxFilePath: string
     };
 })()`
         );
-        
+
         // Update the window's content size
         newWin.setContentSize(width, height);
     });
-    
+
     newWin.loadFile(tempHtmlPath);
-    
+
     return newWin;
 }
 
@@ -123,6 +123,19 @@ function showDropdownWindow() {
 
 // When Electron has finished initialization, create window
 app.whenReady().then(() => {
+    protocol.interceptFileProtocol('file', (request, callback) => {
+        let url = request.url.substr(7); // remove 'file://'
+
+        // Check if the request matches the problematic script path
+        if (!url.includes('.webpack') && !url.includes('/var')) {
+            // Map it to your actual file location
+            url = path.join(__dirname, '..', 'renderer', url);
+        }
+        
+        console.log(url);
+        callback({path: url});
+    });
+
     // Register a custom protocol to serve assets from the local assets directory
     protocol.registerFileProtocol('assets', (request, callback) => {
         const assetPath = decodeURI(request.url.replace('assets://', ''));
@@ -133,13 +146,13 @@ app.whenReady().then(() => {
         const assetPath = decodeURI(request.url.replace('styles://', ''));
         callback({path: path.join(__dirname, '../styles', assetPath)});
     });
-    
-    
+
+
     //Install a menubar icon
     const trayIcon = nativeImage.createEmpty();
     const iconPath = path.join(__dirname, '../assets', 'icon.png');
     const icon2xPath = path.join(__dirname, '../assets', 'icon@2x.png');
-    
+
     trayIcon.addRepresentation({
         scaleFactor: 1,
         width: 22,
@@ -155,7 +168,7 @@ app.whenReady().then(() => {
 
 // Create the tray with the composite image
     const tray = new Tray(trayIcon);
-    
+
     tray.on('click', () => {
         if (dropdownWindow && dropdownWindow.isVisible()) {
             console.log("Hiding dropdown window");
@@ -168,7 +181,7 @@ app.whenReady().then(() => {
 
     console.log('Uploads directory:', getUploadsDir());
     appServer = startServer(PORT);
-    
+
     mcpServer = startMcp(MCP_PORT);
 
     app.on('activate', function () {
@@ -188,7 +201,7 @@ app.on('quit', () => {
     }
 });
 
-export async function injectWindow(name: string, json : string) {
+export async function injectWindow(name: string, json: string) {
     console.log(`Injecting window: ${name}`);
 
     const win = windows.get(name);
@@ -205,32 +218,32 @@ export async function injectWindow(name: string, json : string) {
 
 export async function readWindow(name: string) {
     console.log(`Reading window: ${name}`);
-    
+
     const win = windows.get(name);
     if (!win) {
         const filename = path.join(getUploadsDir(), `${name}.tsx`);
-        
+
         if (fs.existsSync(filename)) {
             console.log(`Found window file: ${name}`);
             const newWin = await openFile(filename);
-            
+
             if (!newWin) {
                 console.warn('Invalid window:', name);
                 return null;
             }
-            
+
             const state = await newWin.webContents.executeJavaScript('window.getState()');
             return JSON.stringify(state, null, 2);
         }
-        
+
         console.warn('Window not found:', name);
         return null;
     }
-    
+
     console.log(`Found window: ${name}`);
     // Execute the getState method on the component instance
     const state = await win.webContents.executeJavaScript('window.getState()');
-    
+
     return JSON.stringify(state, null, 2);
 }
 
@@ -283,7 +296,7 @@ export function showFile(selectedFile: string) {
     shell.showItemInFolder(filepath);
 }
 
-export function openFile(selectedFile: string) : BrowserWindow | undefined {
+export function openFile(selectedFile: string): BrowserWindow | undefined {
     const uploadsDir = getUploadsDir();
     if (!selectedFile.startsWith(uploadsDir)) {
         console.warn('Selected file is not in uploadsDir');
@@ -295,19 +308,19 @@ export function openFile(selectedFile: string) : BrowserWindow | undefined {
         existingWin.focus();
         return;
     }
-    
+
     //filename without ext
     const filenameWithoutExt = path.basename(selectedFile, path.extname(selectedFile));
     const newWin = createNewWindowWithTSX(filenameWithoutExt, selectedFile);
-    
+
     //When the window is closed, remove it from the windows map
     newWin.on('closed', () => {
         windows.delete(filenameWithoutExt);
     });
-    
+
     //Save the window to a global map
     windows.set(filenameWithoutExt, newWin);
-    
+
     return newWin;
 }
 
