@@ -38,7 +38,16 @@ function copyDirectory(dirName, srcRoot, distRoot) {
   fs.readdirSync(srcDir).forEach(file => {
     const srcFile = path.join(srcDir, file);
     const destFile = path.join(destDir, file);
-    copyFile(srcFile, destFile);
+    if (fs.statSync(srcFile).isDirectory()) {
+      // Skip node_modules within directories
+      if (file === 'node_modules') return;
+      
+      // Recursively copy subdirectories
+      const subDirName = path.join(dirName, file);
+      copyDirectory(subDirName, srcRoot, distRoot);
+    } else {
+      copyFile(srcFile, destFile);
+    }
   });
   
   console.log(`Copied all files from ${srcDir} to ${destDir}`);
@@ -52,9 +61,13 @@ function copyDirectory(dirName, srcRoot, distRoot) {
 function copyNodeModulesAssets(destDir, assets) {
   ensureDirectoryExists(destDir);
   
-  assets.forEach(({ package, file, destName }) => {
+  assets.forEach(({ package, file, destName, workspace }) => {
     let src;
-    if (package.endsWith('.js')) {
+    
+    if (workspace) {
+      // Use the file from the workspace
+      src = path.resolve(__dirname, workspace, 'node_modules', package, file);
+    } else if (package.endsWith('.js')) {
       // If package ends with .js, use it directly as the source file
       src = path.resolve(__dirname, 'node_modules', package);
     } else {
@@ -73,14 +86,9 @@ function copyNodeModulesAssets(destDir, assets) {
  */
 function build(config) {
   const { srcRoot, distRoot, createDirectories, directoriesToCopy, nodeModulesAssets } = config;
-  
-  // Copy HTML file
-  const htmlSrc = path.join(srcRoot, 'renderer/index.html');
-  const htmlDest = path.join(distRoot, 'renderer/index.html');
-  copyFile(htmlSrc, htmlDest);
-  
+
   // Create directories
-    createDirectories.forEach(ensureDirectoryExists);
+  createDirectories.forEach(ensureDirectoryExists);
   
   // Copy project directories
   directoriesToCopy.forEach(dir => {
@@ -96,13 +104,12 @@ function build(config) {
 // Configuration
 const config = {
   srcRoot: path.resolve(__dirname, 'src'),
-  distRoot: path.resolve(__dirname, 'dist'),
+  distRoot: path.resolve(__dirname, '.webpack'),
   createDirectories: [
-    'dist',
-    'dist/renderer',
-    'dist/assets',
-    'dist/templates',
-    'dist/styles'
+    '.webpack/renderer',
+    '.webpack/assets',
+    '.webpack/templates',
+    '.webpack/styles'
   ],
   directoriesToCopy: [
     'assets',
@@ -111,27 +118,33 @@ const config = {
   nodeModulesAssets: [
     {
       package: '@babel/standalone',
-      file: 'babel.min.js'
+      file: 'babel.min.js',
+      workspace: 'src/templates'
     },
     {
       package: 'react/umd',
-      file: 'react.development.js'
+      file: 'react.development.js',
+      workspace: 'src/templates'
     },
     {
       package: 'react-dom/umd',
-      file: 'react-dom.development.js'
+      file: 'react-dom.development.js',
+      workspace: 'src/templates'
     },
     {
       package: 'postcss/lib',
-      file: 'postcss.js'
+      file: 'postcss.js',
+      workspace: 'src/templates'
     },
     {
       package: 'twind',
-      file: 'twind.umd.js'
+      file: 'twind.umd.js',
+      workspace: 'src/templates'
     },
     {
       package: 'lucide/dist/umd',
-      file: 'lucide.js'
+      file: 'lucide.js',
+      workspace: 'src/templates'
     }
   ]
 };

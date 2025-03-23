@@ -82,7 +82,7 @@ async function sendToClaude(message: string): Promise<CommandResult> {
     const escapedMessage = message.replace(/'/g, "'\\''");
     
     // Build and execute the osascript command
-    const scriptPath = path.join(__dirname, 'assets/sendtoclaude.js');
+    const scriptPath = path.join(__dirname, '../assets/sendtoclaude.js');
     const command = `osascript -l JavaScript ${scriptPath} '${escapedMessage}'`;
     const output = await executeCommand(command);
     

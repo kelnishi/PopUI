@@ -24,14 +24,14 @@ function createMainWindow() {
         width: 800,
         height: 600,
         webPreferences: {
-            preload: path.join(__dirname, 'preload.js'),
+            preload: path.join(__dirname, '../renderer/view/preload.js'),
             nodeIntegration: false,
             contextIsolation: true,
         },
     });
 
     // Load the index.html from the renderer folder
-    mainWindow.loadFile(path.join(__dirname, 'renderer/index.html'));
+    mainWindow.loadFile(path.join(__dirname, '../renderer/view/index.html'));
 
     // Open DevTools in development mode
     if (process.env.NODE_ENV === 'development') {
@@ -48,7 +48,7 @@ function createNewWindowWithTSX(filenameWithoutExt : string, tsxFilePath: string
     
     // Apply the local variables to the TsxWindow.html template file.
     // ${tsxCode} and ${filename} are placeholders in the template file.
-    const htmlTemplate = fs.readFileSync(path.join(__dirname, 'templates', 'TsxWindow.html'), 'utf-8');
+    const htmlTemplate = fs.readFileSync(path.join(__dirname, '../templates', 'TsxWindow.html'), 'utf-8');
     const htmlContent = htmlTemplate
         .replace('${tsxCode}', tsxCode)
         .replace('${filename}', filenameWithoutExt);
@@ -60,7 +60,7 @@ function createNewWindowWithTSX(filenameWithoutExt : string, tsxFilePath: string
         width: 800,
         height: 600,
         webPreferences: {
-            preload: path.join(__dirname, 'preload.js'),
+            preload: path.join(__dirname, '../renderer/view/preload.js'),
             nodeIntegration: true,
             contextIsolation: true,
         },
@@ -102,13 +102,13 @@ function showDropdownWindow() {
             show: false,
             transparent: false,
             webPreferences: {
-                preload: path.join(__dirname, 'preload.js'),
+                preload: path.join(__dirname, '../renderer/view/preload.js'),
                 nodeIntegration: false,
                 contextIsolation: true,
             }
         });
         // Load your React app (e.g., a local HTML file that bootstraps React)
-        dropdownWindow.loadFile(path.join(__dirname, 'renderer/index.html'));
+        dropdownWindow.loadFile(path.join(__dirname, '../renderer/view/index.html'));
 
         // Hide window when it loses focus
         dropdownWindow.on('blur', () => {
@@ -126,19 +126,19 @@ app.whenReady().then(() => {
     // Register a custom protocol to serve assets from the local assets directory
     protocol.registerFileProtocol('assets', (request, callback) => {
         const assetPath = decodeURI(request.url.replace('assets://', ''));
-        callback({path: path.join(__dirname, 'assets', assetPath)});
+        callback({path: path.join(__dirname, '../assets', assetPath)});
     });
 
     protocol.registerFileProtocol('styles', (request, callback) => {
         const assetPath = decodeURI(request.url.replace('styles://', ''));
-        callback({path: path.join(__dirname, 'styles', assetPath)});
+        callback({path: path.join(__dirname, '../styles', assetPath)});
     });
     
     
     //Install a menubar icon
     const trayIcon = nativeImage.createEmpty();
-    const iconPath = path.join(__dirname, 'assets', 'icon.png');
-    const icon2xPath = path.join(__dirname, 'assets', 'icon@2x.png');
+    const iconPath = path.join(__dirname, '../assets', 'icon.png');
+    const icon2xPath = path.join(__dirname, '../assets', 'icon@2x.png');
     
     trayIcon.addRepresentation({
         scaleFactor: 1,
