@@ -165,6 +165,7 @@ app.whenReady().then(() => {
         height: 44,
         buffer: fs.readFileSync(icon2xPath)
     });
+    trayIcon.setTemplateImage(true);
 
 // Create the tray with the composite image
     const tray = new Tray(trayIcon);

@@ -13,7 +13,7 @@
   ],
   "scripts": {
     "start": "electron-forge start",
-    "package": "DEBUG=electron-forge* electron-forge package",
+    "package": "DEBUG=electron-forge* electron-forge package && open ./out",
     "make": "electron-forge make",
     "publish": "electron-forge publish",
     "copyfiles": "node copy-html.js"
