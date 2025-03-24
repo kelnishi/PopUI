@@ -1,6 +1,7 @@
 import { exec, spawn, ChildProcess, ExecException } from 'child_process';
 import { platform } from 'os';
 import path from "path";
+import {app} from "electron";
 
 /**
  * Result of a command execution
@@ -82,8 +83,8 @@ async function sendToClaude(message: string): Promise<CommandResult> {
     const escapedMessage = message.replace(/'/g, "'\\''");
     
     // Build and execute the osascript command
-    const scriptPath = path.join(__dirname, '../assets/sendtoclaude.js');
-    const command = `osascript -l JavaScript ${scriptPath} '${escapedMessage}'`;
+    const scriptPath = path.join(app.getPath('userData'), 'scripts', 'sendtoclaude.jxa.js');
+    const command = `osascript -l JavaScript "${scriptPath}" '${escapedMessage}'`;
     const output = await executeCommand(command);
     
     return {

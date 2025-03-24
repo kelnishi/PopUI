@@ -13,6 +13,10 @@ const config: ForgeConfig = {
   packagerConfig: {
     asar: true,
     icon: './src/assets/app',
+    osxSign: {
+      entitlements: './entitlements.plist',
+      'entitlements-inherit': './entitlements.plist'
+    } as any,
   },
   rebuildConfig: {},
   makers: [

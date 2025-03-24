@@ -48,7 +48,7 @@ function createNewWindowWithTSX(filenameWithoutExt: string, tsxFilePath: string)
 
     // Apply the local variables to the TsxWindow.html template file.
     // ${tsxCode} and ${filename} are placeholders in the template file.
-    const htmlTemplate = fs.readFileSync(path.join(__dirname, '../templates', 'TsxWindow.html'), 'utf-8');
+    const htmlTemplate = fs.readFileSync(path.join(__dirname, 'templates', 'TsxWindow.html'), 'utf-8');
     const htmlContent = htmlTemplate
         .replace('${tsxCode}', tsxCode)
         .replace('${filename}', filenameWithoutExt);
@@ -121,8 +121,7 @@ function showDropdownWindow() {
     dropdownWindow.show();
 }
 
-// When Electron has finished initialization, create window
-app.whenReady().then(() => {
+function setupProtocolHandlers() {
     protocol.interceptFileProtocol('file', (request, callback) => {
         let url = request.url.substr(7); // remove 'file://'
 
@@ -131,27 +130,28 @@ app.whenReady().then(() => {
             // Map it to your actual file location
             url = path.join(__dirname, '..', 'renderer', url);
         }
-        
-        console.log(url);
+
+        // console.log(url);
         callback({path: url});
     });
 
     // Register a custom protocol to serve assets from the local assets directory
     protocol.registerFileProtocol('assets', (request, callback) => {
         const assetPath = decodeURI(request.url.replace('assets://', ''));
-        callback({path: path.join(__dirname, '../assets', assetPath)});
+        callback({path: path.join(__dirname, 'assets', assetPath)});
     });
 
     protocol.registerFileProtocol('styles', (request, callback) => {
         const assetPath = decodeURI(request.url.replace('styles://', ''));
-        callback({path: path.join(__dirname, '../styles', assetPath)});
+        callback({path: path.join(__dirname, 'styles', assetPath)});
     });
+}
 
-
+function installMenuTrayIcon() {
     //Install a menubar icon
     const trayIcon = nativeImage.createEmpty();
-    const iconPath = path.join(__dirname, '../assets', 'icon.png');
-    const icon2xPath = path.join(__dirname, '../assets', 'icon@2x.png');
+    const iconPath = path.join(__dirname, 'assets', 'icon.png');
+    const icon2xPath = path.join(__dirname, 'assets', 'icon@2x.png');
 
     trayIcon.addRepresentation({
         scaleFactor: 1,
@@ -179,10 +179,30 @@ app.whenReady().then(() => {
             showDropdownWindow();
         }
     });
+}
 
+function unpackScripts() {
+    //Unpack scripts
+    const scriptsDir = path.join(__dirname, 'scripts');
+    const unpackedDir = path.join(app.getPath('userData'), 'scripts');
+    if (!fs.existsSync(unpackedDir)) {
+        fs.mkdirSync(unpackedDir, {recursive: true});
+    }
+    fs.readdirSync(scriptsDir).forEach(file => {
+        const src = path.join(scriptsDir, file);
+        const dest = path.join(unpackedDir, file);
+        fs.copyFileSync(src, dest);
+    });
+}
+
+// When Electron has finished initialization, create window
+app.whenReady().then(() => {
+    setupProtocolHandlers();
+    installMenuTrayIcon();
+    unpackScripts();
+    
     console.log('Uploads directory:', getUploadsDir());
     appServer = startServer(PORT);
-
     mcpServer = startMcp(MCP_PORT);
 
     app.on('activate', function () {
