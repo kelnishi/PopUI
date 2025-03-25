@@ -7,13 +7,11 @@ import {SSEServerTransport} from "@modelcontextprotocol/sdk/server/sse.js";
 import {z} from "zod";
 
 import multer from 'multer';
-import {getUploadsDir} from './utils/paths';
+import {getInterfacesDir} from './utils/paths';
 import path from 'path';
 import * as fs from "node:fs";
 
 import {openFile, readWindow, closeWindow, injectWindow, describeWindow, listWindows, listFiles} from './main';
-
-let serverInstance: Server | null = null;
 
 export interface SseServer {
     server: Server;
@@ -22,98 +20,9 @@ export interface SseServer {
 }
 
 // Set up uploads directory
-const uploadsDir = getUploadsDir();
-if (!fs.existsSync(uploadsDir)) {
-    fs.mkdirSync(uploadsDir, {recursive: true});
-}
-
-export function startServer(port: number): Server {
-    const app = express();
-
-    // Middleware to parse JSON
-    app.use(express.json({limit: '50mb'})); // Increased limit for larger files
-
-    // Basic route
-    app.get('/api/hello', (req, res) => {
-        res.json({message: 'Hello from the server!'});
-    });
-
-    app.get('/api/files', (req, res) => {
-        try {
-            const files = fs.readdirSync(uploadsDir)
-                .filter(fileName => path.extname(fileName) === '.tsx')
-                .map(fileName => ({
-                    name: fileName,
-                    path: path.join(uploadsDir, fileName),
-                    size: fs.statSync(path.join(uploadsDir, fileName)).size
-                }));
-            res.json({files: files});
-        } catch (error) {
-            res.status(500).json({error: 'Could not read upload directory'});
-        }
-    });
-
-    // File upload endpoint that handles direct file data instead of using multer
-    app.post('/upload', async (req, res) => {
-        try {
-            // Check if we have the required data
-            if (!req.body.fileName || !req.body.fileData) {
-                return res.status(400).json({error: 'Missing file data or file name'});
-            }
-
-            const {fileName, fileType, fileSize, fileData} = req.body;
-
-            // Create a safe filename
-            const sanitizedFileName = path.basename(fileName);
-            const filePath = path.join(uploadsDir, sanitizedFileName);
-
-            // Convert array back to Buffer
-            const fileBuffer = Buffer.from(fileData);
-
-            // Write file to disk
-            fs.writeFileSync(filePath, fileBuffer);
-
-            // Return success response
-            res.status(200).json({
-                success: true,
-                message: 'File uploaded successfully',
-                file: {
-                    originalName: fileName,
-                    size: fileSize,
-                    type: fileType,
-                    path: filePath
-                }
-            });
-        } catch (error) {
-            console.error('Error handling file upload:', error);
-            res.status(500).json({error: 'Failed to process file upload', details: String(error)});
-        }
-    });
-
-    // For traditional multipart form uploads, keep multer as an option
-    const upload = multer({dest: uploadsDir});
-    app.post('/upload-form', upload.single('file'), (req, res) => {
-        if (!req.file) {
-            return res.status(400).json({error: 'No file uploaded'});
-        }
-
-        res.status(200).json({
-            success: true,
-            message: 'File uploaded successfully',
-            file: {
-                originalName: req.file.originalname,
-                size: req.file.size,
-                path: req.file.path
-            }
-        });
-    });
-
-    // Start the server
-    serverInstance = app.listen(port, () => {
-        console.log(`Server is running at http://localhost:${port}`);
-    });
-
-    return serverInstance;
+const interfacesDir = getInterfacesDir();
+if (!fs.existsSync(interfacesDir)) {
+    fs.mkdirSync(interfacesDir, {recursive: true});
 }
 
 //Get an SSE McpServer
@@ -174,7 +83,7 @@ export function startMcp(port: number): SseServer {
         },
         async ({name, mode, json, tsx}) => {
             const fileName = `${name}.tsx`;
-            const filePath = path.join(uploadsDir, fileName);
+            const filePath = path.join(interfacesDir, fileName);
 
             if (mode === "show") {
                 let windowState = await readWindow(name as string);
@@ -413,8 +322,23 @@ export function startMcp(port: number): SseServer {
         }
     });
 
+    app.get('/api/files', (req, res) => {
+        try {
+            const files = fs.readdirSync(interfacesDir)
+                .filter(fileName => path.extname(fileName) === '.tsx')
+                .map(fileName => ({
+                    name: fileName,
+                    path: path.join(interfacesDir, fileName),
+                    size: fs.statSync(path.join(interfacesDir, fileName)).size
+                }));
+            res.json({files: files});
+        } catch (error) {
+            res.status(500).json({error: 'Could not read upload directory'});
+        }
+    });
+
     // Start the server
-    serverInstance = app.listen(port, () => {
+    const serverInstance : Server = app.listen(port, () => {
         console.log(`Server is running at http://localhost:${port}`);
     });
 

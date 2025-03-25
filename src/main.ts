@@ -1,17 +1,15 @@
-import {app, BrowserWindow, ipcMain, nativeImage, protocol, shell, Tray} from 'electron';
+import {app, BrowserWindow, ipcMain, nativeImage, protocol, shell, Tray, Menu} from 'electron';
 import * as fs from 'fs';
 import * as path from 'path';
-import {SseServer, startMcp, startServer} from './server';
-import {Server} from "http";
-import {getUploadsDir} from './utils/paths';
+import {SseServer, startMcp} from './server';
+import {getInterfacesDir} from './utils/paths';
 import {sendToClaude} from './shell';
+import MenuItemConstructorOptions = Electron.MenuItemConstructorOptions;
 
-let appServer: Server | null;
 let mcpServer: SseServer | null;
 
 let mainWindow: BrowserWindow | null = null;
 const PORT = 3001;
-const MCP_PORT = 3002;
 
 let tray: Tray | null;
 let dropdownWindow: BrowserWindow | null;
@@ -25,7 +23,7 @@ function createMainWindow() {
         height: 600,
         webPreferences: {
             preload: path.join(__dirname, '../renderer/view/preload.js'),
-            nodeIntegration: false,
+            nodeIntegration: true,
             contextIsolation: true,
         },
     });
@@ -167,17 +165,68 @@ function installMenuTrayIcon() {
     });
     trayIcon.setTemplateImage(true);
 
-// Create the tray with the composite image
-    const tray = new Tray(trayIcon);
+    // Create the tray with the composite image
+    tray = new Tray(trayIcon);
+    // Update the tray menu with recent files
+    function updateTrayMenu() {
+        const files = listFiles();
+        const recentFilesMenu: MenuItemConstructorOptions[] = files.map(file => {
+            const filenameWithoutExt = path.basename(file, path.extname(file));
+            return {
+                label: filenameWithoutExt,
+                click: () => {
+                    const filePath = path.join(getInterfacesDir(), file);
+                    openFile(filePath);
+                }
+            };
+        });
 
-    tray.on('click', () => {
-        if (dropdownWindow && dropdownWindow.isVisible()) {
-            console.log("Hiding dropdown window");
-            dropdownWindow.hide();
-        } else {
-            console.log("Showing dropdown window");
-            showDropdownWindow();
+        if (recentFilesMenu.length > 0) {
+            recentFilesMenu.push({type: 'separator'});
         }
+        
+        recentFilesMenu.push(
+            {
+                label: 'Open Interfaces Folder',
+                click: () => {
+                    const uploadsDir = getInterfacesDir();
+                    shell.openPath(uploadsDir);
+                }
+            },
+        )
+
+        // Create the context menu with proper types
+        const contextMenu: MenuItemConstructorOptions[] = [
+            {
+                label: 'PopUI Settings...',
+                click: () => {
+                    if (!mainWindow) {
+                        createMainWindow();
+                    } else {
+                        mainWindow.show();
+                        mainWindow.focus();
+                    }
+                }
+            },
+            { type: 'separator' },
+            {
+                label: 'Recent Interfaces',
+                submenu: recentFilesMenu
+            },
+            { type: 'separator' },
+            { label: 'Quit', click: () => app.quit() }
+        ];
+
+        // Set the context menu
+        tray?.setContextMenu(Menu.buildFromTemplate(contextMenu));
+    }
+
+    // Set initial menu
+    updateTrayMenu();
+
+    // Update menu when clicked (to refresh recent files)
+    tray.on('click', () => {
+        updateTrayMenu();
     });
 }
 
@@ -201,9 +250,8 @@ app.whenReady().then(() => {
     installMenuTrayIcon();
     unpackScripts();
     
-    console.log('Uploads directory:', getUploadsDir());
-    appServer = startServer(PORT);
-    mcpServer = startMcp(MCP_PORT);
+    console.log('Interfaces directory:', getInterfacesDir());
+    mcpServer = startMcp(PORT);
 
     app.on('activate', function () {
         // On macOS it's common to re-create a window when the dock icon is clicked
@@ -217,8 +265,9 @@ app.on('window-all-closed', function () {
 });
 
 app.on('quit', () => {
-    if (appServer) {
-        appServer.close();
+    if (mcpServer) {
+        mcpServer.server.close();
+        mcpServer.mcp.close();
     }
 });
 
@@ -242,7 +291,7 @@ export async function readWindow(name: string) {
 
     const win = windows.get(name);
     if (!win) {
-        const filename = path.join(getUploadsDir(), `${name}.tsx`);
+        const filename = path.join(getInterfacesDir(), `${name}.tsx`);
 
         if (fs.existsSync(filename)) {
             console.log(`Found window file: ${name}`);
@@ -300,13 +349,13 @@ export function listWindows() {
 }
 
 export function listFiles() {
-    const uploadsDir = getUploadsDir();
+    const uploadsDir = getInterfacesDir();
     return fs.readdirSync(uploadsDir);
 }
 
 // Reveal the file in the system's file manager
 export function showFile(selectedFile: string) {
-    const uploadsDir = getUploadsDir();
+    const uploadsDir = getInterfacesDir();
     if (!selectedFile.startsWith(uploadsDir)) {
         console.warn('Selected file is not in uploadsDir');
         return;
@@ -318,7 +367,7 @@ export function showFile(selectedFile: string) {
 }
 
 export function openFile(selectedFile: string): BrowserWindow | undefined {
-    const uploadsDir = getUploadsDir();
+    const uploadsDir = getInterfacesDir();
     if (!selectedFile.startsWith(uploadsDir)) {
         console.warn('Selected file is not in uploadsDir');
         return;
