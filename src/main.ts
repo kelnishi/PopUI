@@ -1,10 +1,13 @@
-import {app, BrowserWindow, ipcMain, nativeImage, protocol, shell, Tray, Menu} from 'electron';
+import {app, BrowserWindow, ipcMain, nativeImage, protocol, shell, dialog, Tray, Menu} from 'electron';
 import * as fs from 'fs';
 import * as path from 'path';
 import {SseServer, startMcp} from './server';
 import {getInterfacesDir} from './utils/paths';
-import {sendToClaude} from './shell';
+import {sendToClaude, reloadClaude} from './shell';
 import MenuItemConstructorOptions = Electron.MenuItemConstructorOptions;
+import * as os from "node:os";
+import {Simulate} from "react-dom/test-utils";
+import error = Simulate.error;
 
 let mcpServer: SseServer | null;
 
@@ -167,6 +170,7 @@ function installMenuTrayIcon() {
 
     // Create the tray with the composite image
     tray = new Tray(trayIcon);
+
     // Update the tray menu with recent files
     function updateTrayMenu() {
         const files = listFiles();
@@ -184,7 +188,7 @@ function installMenuTrayIcon() {
         if (recentFilesMenu.length > 0) {
             recentFilesMenu.push({type: 'separator'});
         }
-        
+
         recentFilesMenu.push(
             {
                 label: 'Open Interfaces Folder',
@@ -208,13 +212,13 @@ function installMenuTrayIcon() {
                     }
                 }
             },
-            { type: 'separator' },
+            {type: 'separator'},
             {
                 label: 'Recent Interfaces',
                 submenu: recentFilesMenu
             },
-            { type: 'separator' },
-            { label: 'Quit', click: () => app.quit() }
+            {type: 'separator'},
+            {label: 'Quit', click: () => app.quit()}
         ];
 
         // Set the context menu
@@ -244,12 +248,127 @@ function unpackScripts() {
     });
 }
 
+function detectClaudeDesktopMac(): boolean {
+    try {
+        // Try opening the app with bundle ID (with -g to not actually launch it)
+        // Use -n to ensure a new instance, and redirect output to /dev/null
+        require('child_process').execSync(
+            `open -gb com.anthropic.claudefordesktop -n --args --dry-run > /dev/null 2>&1`
+        );
+        // If we get here, the command succeeded and the app exists
+        return true;
+    } catch (error) {
+        // If open command fails, app isn't available or launchable
+        return false;
+    }
+}
+
+function canonicalizeAppDataPath(filePath: string): string {
+    if (process.platform === 'darwin') {
+        // On macOS
+        return path.join(os.homedir(), 'Library', 'Application Support', filePath);
+    } else if (process.platform === 'win32') {
+        // On Windows
+        return path.join(process.env.APPDATA || '', 'Claude', filePath);
+    } else {
+        // On Linux
+        return path.join(os.homedir(), '.config', filePath);
+    }
+}
+
+function tryInstallClaudeDesktop(): boolean {
+    //Read the preferences file to see if the user has enabled the Claude Desktop integration
+    const jsonPath = canonicalizeAppDataPath(path.join('Claude', 'claude_desktop_config.json'));
+
+    // Load the json file
+    const json = fs.readFileSync(jsonPath, 'utf-8');
+    const claudePreferences = JSON.parse(json);
+    
+    //Add PopUI to the "mcpServers" object
+    claudePreferences.mcpServers = claudePreferences.mcpServers || {};
+    claudePreferences.mcpServers.PopUI = {
+        command: 'npx',
+        args: [
+            "-y",
+            "supergateway",
+            "--sse",
+            "http://localhost:3001/sse"
+        ]
+    };
+    
+    // Write the updated preferences back to the file
+    fs.writeFileSync(jsonPath, JSON.stringify(claudePreferences, null, 2), 'utf-8');
+    reloadClaude().then(() => {
+        console.log("PopUI installed in Claude Desktop");
+    });
+    
+    return false;
+}
+
+function detectClaudeInstallation() {
+    if (process.platform === 'darwin') {
+        const claudeDetected = detectClaudeDesktopMac();
+
+        if (!claudeDetected) {
+            dialog.showMessageBox({
+                type: 'warning',
+                title: 'PopUI Error',
+                message: 'Claude Desktop Not Found',
+                detail: 'PopUI works with Claude Desktop. Please install Claude Desktop from https://claude.ai/download to use PopUI.',
+                buttons: ['Quit', 'Download'],
+                defaultId: 1
+            }).then(result => {
+                // If user clicked "Download" (button index 0)
+                if (result.response === 1) {
+                    shell.openExternal('https://claude.ai/download');
+                }
+                else
+                {
+                    app.quit();
+                }
+            }).catch(err => {
+                console.error('Dialog error:', err);
+            });
+        }
+        else
+        {
+            //Check the preferences to see if the user has enabled the Claude Desktop integration
+            const jsonPath = canonicalizeAppDataPath(path.join('Claude', 'claude_desktop_config.json'));
+            // Load the json file
+            const json = fs.readFileSync(jsonPath, 'utf-8');
+            const claudePreferences = JSON.parse(json);
+            //Look for "PopUI" key in the "mcpServers" object
+            const popuiConfig = claudePreferences.mcpServers?.PopUI;
+            if (!popuiConfig) {
+                // If the key is not found, show a warning
+                dialog.showMessageBox({
+                   type: 'warning',
+                     title: 'Install PopUI',
+                        message: 'Install the PopUI tool in Claude Desktop',
+                    detail: 'Click to install the PopUI tool in Claude Desktop as an MCP Server.',
+                    buttons: ['Dismiss', 'Install'],
+                    defaultId: 1
+                }).then(result => {
+                    if (result.response === 1) {
+                        tryInstallClaudeDesktop();
+                    }
+                }).catch(err => {
+                   console.error('Dialog error:', err); 
+                });
+            }
+        }
+    }
+
+}
+
 // When Electron has finished initialization, create window
 app.whenReady().then(() => {
     setupProtocolHandlers();
     installMenuTrayIcon();
     unpackScripts();
-    
+
+    detectClaudeInstallation();
+
     console.log('Interfaces directory:', getInterfacesDir());
     mcpServer = startMcp(PORT);
 
@@ -267,7 +386,6 @@ app.on('window-all-closed', function () {
 app.on('quit', () => {
     if (mcpServer) {
         mcpServer.server.close();
-        mcpServer.mcp.close();
     }
 });
 

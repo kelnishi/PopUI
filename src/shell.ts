@@ -99,6 +99,34 @@ async function sendToClaude(message: string): Promise<CommandResult> {
   }
 }
 
+async function reloadClaude(): Promise<CommandResult> {
+  // Check if running on macOS
+  if (!isMacOS()) {
+    return {
+      success: false,
+      error: 'This feature is only available on macOS',
+      platform: platform()
+    };
+  }
+
+  try {
+    // Build and execute the osascript command
+    const scriptPath = path.join(app.getPath('userData'), 'scripts', 'reloadclaude.jxa.js');
+    const command = `osascript -l JavaScript "${scriptPath}"`;
+    const output = await executeCommand(command);
+
+    return {
+      success: true,
+      output
+    };
+  } catch (error) {
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : String(error)
+    };
+  }
+}
+
 /**
  * Checks if the current platform is macOS
  * @returns true if on macOS, false otherwise
@@ -122,6 +150,7 @@ export {
   executeCommand,
   spawnProcess,
   sendToClaude,
+  reloadClaude,
   isMacOS,
   getPlatformInfo,
   CommandResult,
