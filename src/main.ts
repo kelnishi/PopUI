@@ -172,16 +172,20 @@ function installMenuTrayIcon() {
     // Update the tray menu with recent files
     function updateTrayMenu() {
         const files = listFiles();
-        const recentFilesMenu: MenuItemConstructorOptions[] = files.map(file => {
-            const filenameWithoutExt = path.basename(file, path.extname(file));
-            return {
-                label: filenameWithoutExt,
-                click: () => {
-                    const filePath = path.join(getInterfacesDir(), file);
-                    openFile(filePath);
-                }
-            };
-        });
+        const recentFilesMenu: MenuItemConstructorOptions[] = files
+            .filter(file => {
+                return file.endsWith('.tsx');
+            })
+            .map(file => {
+                const filenameWithoutExt = path.basename(file, path.extname(file));
+                return {
+                    label: filenameWithoutExt,
+                    click: () => {
+                        const filePath = path.join(getInterfacesDir(), file);
+                        openFile(filePath);
+                    }
+                };
+            });
 
         if (recentFilesMenu.length > 0) {
             recentFilesMenu.push({type: 'separator'});
@@ -501,6 +505,14 @@ export function openFile(selectedFile: string): BrowserWindow | undefined {
 
     return newWin;
 }
+
+ipcMain.handle('link-external', async (_, url) => {
+    if (typeof url === 'string') {
+        await shell.openExternal(url);
+        return true;
+    }
+    return false;
+});
 
 ipcMain.handle('open-file', async (_, selectedFile: string) => {
     openFile(selectedFile);

@@ -12,6 +12,10 @@ if (contextBridge && ipcRenderer) {
       return ipcRenderer.invoke('server-request', endpoint, data);
     },
 
+    linkExternal: (url: string) => {
+      return ipcRenderer.invoke('link-external', url);  
+    },
+    
     openFile: (filename: string) => {
       console.log(`Preload: openFile ${filename}`);
       return ipcRenderer.invoke('open-file', filename);

@@ -2,6 +2,7 @@ import type { Configuration } from 'webpack';
 
 import { rules } from './webpack.rules';
 import { plugins } from './webpack.plugins';
+import path from "path";
 
 rules.push({
   test: /\.css$/,
@@ -16,6 +17,7 @@ export const rendererConfig: Configuration = {
   resolve: {
     extensions: ['.js', '.ts', '.jsx', '.tsx', '.css'],
     alias: {
+      '@': path.resolve(__dirname, '.'),
       // Redirect node: imports to the corresponding polyfills or disable them
       'node:crypto': 'crypto',
       'node:fs': false,

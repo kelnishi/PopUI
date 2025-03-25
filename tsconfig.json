@@ -10,7 +10,11 @@
     "strict": true,
     "jsx": "react",
     "lib": ["DOM", "ES2020"],
-    "types": ["node"]
+    "types": ["node"],
+    "baseUrl": ".",
+    "paths": {
+      "@/*": ["./*"]
+    }
   },
   "include": ["src/**/*", "forge.config.ts"]
 }

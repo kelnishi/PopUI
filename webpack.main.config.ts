@@ -18,6 +18,7 @@ const plugins: WebpackPluginInstance[] = [
         patterns: [
             {from: 'src/assets', to: 'assets'},
             {from: 'src/scripts', to: 'scripts'},
+            {from: 'src/styles', to: 'styles'},
             {
                 from: 'src/templates',
                 to: 'templates',
@@ -53,6 +54,7 @@ export const mainConfig: Configuration = {
     resolve: {
         extensions: ['.js', '.ts', '.jsx', '.tsx', '.css', '.json'],
         alias: {
+            '@': path.resolve(__dirname, '.'),
             // Redirect node: imports to the corresponding polyfills or disable them
             'node:crypto': 'crypto',
             'node:fs': false,
