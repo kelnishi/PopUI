@@ -13,6 +13,9 @@ const config: ForgeConfig = {
   packagerConfig: {
     asar: true,
     icon: './src/assets/app',
+    appBundleId: 'com.kelnishi.popui',
+    appCategoryType: 'public.app-category.productivity',
+    appCopyright: 'Copyright © 2025 Kelvin Nishikawa',
     osxSign: {
       entitlements: './entitlements.plist',
       'entitlements-inherit': './entitlements.plist'

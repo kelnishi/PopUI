@@ -1,13 +1,11 @@
-import {app, BrowserWindow, ipcMain, nativeImage, protocol, shell, dialog, Tray, Menu} from 'electron';
+import {app, BrowserWindow, dialog, ipcMain, Menu, nativeImage, protocol, shell, Tray} from 'electron';
 import * as fs from 'fs';
 import * as path from 'path';
 import {SseServer, startMcp} from './server';
 import {getInterfacesDir} from './utils/paths';
-import {sendToClaude, reloadClaude} from './shell';
-import MenuItemConstructorOptions = Electron.MenuItemConstructorOptions;
+import {reloadClaude, sendToClaude} from './shell';
 import * as os from "node:os";
-import {Simulate} from "react-dom/test-utils";
-import error = Simulate.error;
+import MenuItemConstructorOptions = Electron.MenuItemConstructorOptions;
 
 let mcpServer: SseServer | null;
 
@@ -249,16 +247,12 @@ function unpackScripts() {
 }
 
 function detectClaudeDesktopMac(): boolean {
+    const mdfind = `mdfind "kMDItemCFBundleIdentifier == 'com.anthropic.claudefordesktop'"`;
     try {
-        // Try opening the app with bundle ID (with -g to not actually launch it)
-        // Use -n to ensure a new instance, and redirect output to /dev/null
-        require('child_process').execSync(
-            `open -gb com.anthropic.claudefordesktop -n --args --dry-run > /dev/null 2>&1`
-        );
-        // If we get here, the command succeeded and the app exists
-        return true;
+        const result = require('child_process').execSync(mdfind).toString();
+        return result.trim() !== '';
     } catch (error) {
-        // If open command fails, app isn't available or launchable
+        console.error('Error checking if Claude is installed:', error);
         return false;
     }
 }
@@ -283,7 +277,7 @@ function tryInstallClaudeDesktop(): boolean {
     // Load the json file
     const json = fs.readFileSync(jsonPath, 'utf-8');
     const claudePreferences = JSON.parse(json);
-    
+
     //Add PopUI to the "mcpServers" object
     claudePreferences.mcpServers = claudePreferences.mcpServers || {};
     claudePreferences.mcpServers.PopUI = {
@@ -295,13 +289,13 @@ function tryInstallClaudeDesktop(): boolean {
             "http://localhost:3001/sse"
         ]
     };
-    
+
     // Write the updated preferences back to the file
     fs.writeFileSync(jsonPath, JSON.stringify(claudePreferences, null, 2), 'utf-8');
     reloadClaude().then(() => {
         console.log("PopUI installed in Claude Desktop");
     });
-    
+
     return false;
 }
 
@@ -321,17 +315,13 @@ function detectClaudeInstallation() {
                 // If user clicked "Download" (button index 0)
                 if (result.response === 1) {
                     shell.openExternal('https://claude.ai/download');
-                }
-                else
-                {
+                } else {
                     app.quit();
                 }
             }).catch(err => {
                 console.error('Dialog error:', err);
             });
-        }
-        else
-        {
+        } else {
             //Check the preferences to see if the user has enabled the Claude Desktop integration
             const jsonPath = canonicalizeAppDataPath(path.join('Claude', 'claude_desktop_config.json'));
             // Load the json file
@@ -342,9 +332,9 @@ function detectClaudeInstallation() {
             if (!popuiConfig) {
                 // If the key is not found, show a warning
                 dialog.showMessageBox({
-                   type: 'warning',
-                     title: 'Install PopUI',
-                        message: 'Install the PopUI tool in Claude Desktop',
+                    type: 'warning',
+                    title: 'Install PopUI',
+                    message: 'Install the PopUI tool in Claude Desktop',
                     detail: 'Click to install the PopUI tool in Claude Desktop as an MCP Server.',
                     buttons: ['Dismiss', 'Install'],
                     defaultId: 1
@@ -353,7 +343,7 @@ function detectClaudeInstallation() {
                         tryInstallClaudeDesktop();
                     }
                 }).catch(err => {
-                   console.error('Dialog error:', err); 
+                    console.error('Dialog error:', err);
                 });
             }
         }
