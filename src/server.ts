@@ -1,17 +1,18 @@
 import express from 'express';
 import {Server} from 'http';
-import {McpServer, ResourceTemplate, ListResourcesCallback} from "@modelcontextprotocol/sdk/server/mcp.js";
-import {TextContent, ListResourcesResult} from "@modelcontextprotocol/sdk/types.js";
 
+import {McpServer} from "@modelcontextprotocol/sdk/server/mcp.js";
+import {TextContent} from "@modelcontextprotocol/sdk/types.js";
 import {SSEServerTransport} from "@modelcontextprotocol/sdk/server/sse.js";
+
 import {z} from "zod";
 
-import multer from 'multer';
 import {getInterfacesDir} from './utils/paths';
 import path from 'path';
-import * as fs from "node:fs";
+import fs from 'fs';
 
-import {openFile, readWindow, closeWindow, injectWindow, describeWindow, listWindows, listFiles} from './main';
+import {closeWindow, describeWindow, injectWindow, listFiles, openFile, readWindow} from './main';
+import preferences from './preferences';
 
 export interface SseServer {
     server: Server;
@@ -40,7 +41,7 @@ export function startMcp(port: number): SseServer {
 
     mcpServer.tool(
         "pop-ui",
-        "This tool allows the host to create and display a shared user interface that can serve as a visual context layer for the conversation.\n" +
+        "This tool allows the host to pop (create and display) a shared user interface that can serve as a visual context layer for the conversation.\n" +
         "This tool allows the host to move beyond text-only interactions to create, collaborative experiences like games, visualization tools, control panels, " +
         "and other interactive interfaces where both parties can manipulate a shared visual context.\n" +
         "Once a user interface is shown, subsequent pop-ui tool calls in 'get' mode should be used to update the context state.",
@@ -55,7 +56,6 @@ export function startMcp(port: number): SseServer {
                 "'show' to show a user interface (create/update by passing tsx or show an existing)\n" +
                 "'get' to read the current model state of a user interface\n" +
                 "'set' to inject a model state into a user interface\n" +
-                "'describe' to get the schema of the json model object\n" +
                 "'list' to list existing user interfaces\n"
             ),
             json: z.string().optional().describe(
@@ -70,9 +70,8 @@ export function startMcp(port: number): SseServer {
                 "This component must set a function 'window.describeState()' to get the schema of the json model object.\n" +
                 "This component may send chat messages to the host with 'window.api.sendToHost(message)'.\n" +
                 "- Use this method with submit/confirm buttons and action elements to prompt the host on behalf of the user.\n" +
-                "- Do not use this method for interactive elements within the user interface; it should only be used as a final submit button.\n" +
-                "- Example: A \"Confirm choice\" button should call 'window.api.sendToHost(\"Selection made.\")' to prompt the host to read the user interface state.\n" +
-                "- Example: In a game, a button \"Done\" should call 'window.api.sendToHost(\"Your turn.\")' to prompt the host to read the state and make the next move.\n" +
+                "- Do not use this method for interactive elements within the user interface; it should only be used to send user intent.\n" +
+                "- Example: A \"Confirm choice\" button should call 'window.api.sendToHost(\"*Selection made*.\")' to prompt the host to 'get' the user interface state.\n" +
                 "This component should use tailwindcss for good styling and alignment.\n" +
                 "This component container should have a preferred layout size, use tailwindcss w-number h-number.\n" +
                 "This component should use unicode emoji and/or lucide-react for icons, including empty space icons.\n" +
@@ -85,6 +84,9 @@ export function startMcp(port: number): SseServer {
             const fileName = `${name}.tsx`;
             const filePath = path.join(interfacesDir, fileName);
 
+            const callCount = preferences.get('toolCalls') as number + 1;
+            preferences.set('toolCalls', callCount);
+            
             if (mode === "show") {
                 let windowState = await readWindow(name as string);
 
@@ -99,21 +101,44 @@ export function startMcp(port: number): SseServer {
                         isError: true
                     }
                 }
-                
+
                 if (tsx !== undefined) {
+                    //tsx content must include window.getState and window.setState
+                    if (!tsx.includes('window.getState')) {
+                        return {
+                            content: [
+                                {
+                                    type: "text",
+                                    text: `tsx React component must set window.getState() function to retrieve the json state.`
+                                } as TextContent
+                            ],
+                            isError: true
+                        }
+                    }
+                    if (!tsx.includes('window.setState')) {
+                        return {
+                            content: [
+                                {
+                                    type: "text",
+                                    text: `tsx React component must set window.setState(json) function to inject the json state.`
+                                } as TextContent
+                            ],
+                            isError: true
+                        }
+                    }
+                    
                     await closeWindow(name as string);
                     //Save the tsx file to the uploads directory
                     await fs.promises.writeFile(filePath, tsx);
-                    
+
                     openFile(filePath);
                     // mcpServer.server.notification({
                     //     method: "notifications/resources/list_changed",
                     // });
-                }
-                else if (json !== undefined) {
+                } else if (json !== undefined) {
                     windowState = await injectWindow(name as string, json as string);
                 }
-                
+
                 return {
                     content: [
                         {
@@ -221,7 +246,7 @@ export function startMcp(port: number): SseServer {
                     isError: false
                 }
             }
-
+            
             //Return invalid mode
             return {
                 content: [
@@ -249,7 +274,7 @@ export function startMcp(port: number): SseServer {
             // A colon indicates a comment in SSE.
             res.write(":\n\n");
         }, 15000);
-        
+
         req.on('close', () => {
             console.log(`Client Connection ${transport.sessionId} closed`);
             clearInterval(heartbeat);
@@ -263,7 +288,7 @@ export function startMcp(port: number): SseServer {
             clearInterval(heartbeat);
             transports.delete(transport.sessionId);
         });
-        res.cookie("x-session-id", transport.sessionId, { httpOnly: true, secure: true, sameSite: "strict" });
+        res.cookie("x-session-id", transport.sessionId, {httpOnly: true, secure: true, sameSite: "strict"});
 
         // Connect to MCP server
         await mcpServer.connect(transport);
@@ -305,13 +330,11 @@ export function startMcp(port: number): SseServer {
 
             // If we found a sessionId and it exists in our connections
             if (sessionId) {
-                if (transports.has(sessionId)){
+                if (transports.has(sessionId)) {
                     console.log(`Using specified session ID: ${sessionId}`);
                     const transport: SSEServerTransport = transports.get(sessionId);
                     await transport.handlePostMessage(req, res, parsedBody);
-                }
-                else 
-                {
+                } else {
                     console.log(`Session ID ${sessionId} not found in active connections. Sending 400.`);
                     return res.status(400).send("SSE connection not active. Please reconnect.");
                 }
@@ -338,7 +361,7 @@ export function startMcp(port: number): SseServer {
     });
 
     // Start the server
-    const serverInstance : Server = app.listen(port, () => {
+    const serverInstance: Server = app.listen(port, () => {
         console.log(`Server is running at http://localhost:${port}`);
     });
 
