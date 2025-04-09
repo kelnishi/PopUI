@@ -7,6 +7,9 @@ import {reloadClaude, sendToClaude} from './shell';
 import * as os from "node:os";
 import MenuItemConstructorOptions = Electron.MenuItemConstructorOptions;
 
+import {runProxy} from 'mcp-remote/dist/proxy';
+import * as process from "node:process";
+
 let mcpServer: SseServer | null;
 
 let mainWindow: BrowserWindow | null = null;
@@ -130,7 +133,7 @@ function setupProtocolHandlers() {
             url = path.join(__dirname, '..', 'renderer', url);
         }
 
-        // console.log(url);
+        // console.error(url);
         callback({path: url});
     });
 
@@ -236,18 +239,39 @@ function installMenuTrayIcon() {
     });
 }
 
+
 function unpackScripts() {
-    //Unpack scripts
     const scriptsDir = path.join(__dirname, 'scripts');
     const unpackedDir = path.join(app.getPath('userData'), 'scripts');
     if (!fs.existsSync(unpackedDir)) {
         fs.mkdirSync(unpackedDir, {recursive: true});
     }
-    fs.readdirSync(scriptsDir).forEach(file => {
-        const src = path.join(scriptsDir, file);
-        const dest = path.join(unpackedDir, file);
-        fs.copyFileSync(src, dest);
-    });
+
+    // Helper function to copy files and directories recursively
+    function copyRecursively(src: string, dest: string) {
+        const stats = fs.statSync(src);
+
+        if (stats.isDirectory()) {
+            // Create destination directory if it doesn't exist
+            if (!fs.existsSync(dest)) {
+                fs.mkdirSync(dest, { recursive: true });
+            }
+
+            // Copy each item inside the directory
+            const entries = fs.readdirSync(src);
+            for (const entry of entries) {
+                const srcPath = path.join(src, entry);
+                const destPath = path.join(dest, entry);
+                copyRecursively(srcPath, destPath);
+            }
+        } else {
+            // It's a file, copy it directly
+            fs.copyFileSync(src, dest);
+        }
+    }
+
+    // Start recursive copy from root scripts directory
+    copyRecursively(scriptsDir, unpackedDir);
 }
 
 function detectClaudeDesktopMac(): boolean {
@@ -280,24 +304,29 @@ function tryInstallClaudeDesktop(): boolean {
 
     // Load the json file
     const json = fs.readFileSync(jsonPath, 'utf-8');
-    const claudePreferences = JSON.parse(json);
+    let claudePreferences;
+    try {
+        claudePreferences = JSON.parse(json);
+    } catch (error) {
+        claudePreferences = {};
+    }
 
     //Add PopUI to the "mcpServers" object
     claudePreferences.mcpServers = claudePreferences.mcpServers || {};
+
+    //$(mdfind "kMDItemCFBundleIdentifier == 'com.kelnishi.popui'")"/Contents/MacOS/PopUI"
     claudePreferences.mcpServers.PopUI = {
-        command: 'npx',
+        command: 'sh',
         args: [
-            "-y",
-            "supergateway",
-            "--sse",
-            "http://localhost:3001/sse"
+            "-c",
+            "$(mdfind \"kMDItemCFBundleIdentifier == 'com.kelnishi.popui'\")\"/Contents/MacOS/PopUI\" --sse"
         ]
     };
 
     // Write the updated preferences back to the file
     fs.writeFileSync(jsonPath, JSON.stringify(claudePreferences, null, 2), 'utf-8');
     reloadClaude().then(() => {
-        console.log("PopUI installed in Claude Desktop");
+        console.error("PopUI installed in Claude Desktop");
     });
 
     return false;
@@ -330,7 +359,12 @@ function detectClaudeInstallation() {
             const jsonPath = canonicalizeAppDataPath(path.join('Claude', 'claude_desktop_config.json'));
             // Load the json file
             const json = fs.readFileSync(jsonPath, 'utf-8');
-            const claudePreferences = JSON.parse(json);
+            let claudePreferences;
+            try {
+                claudePreferences = JSON.parse(json);
+            } catch (error) {
+                claudePreferences = {};
+            }
             //Look for "PopUI" key in the "mcpServers" object
             const popuiConfig = claudePreferences.mcpServers?.PopUI;
             if (!popuiConfig) {
@@ -355,21 +389,69 @@ function detectClaudeInstallation() {
 
 }
 
-// When Electron has finished initialization, create window
+
 app.whenReady().then(() => {
-    setupProtocolHandlers();
-    installMenuTrayIcon();
-    unpackScripts();
 
-    detectClaudeInstallation();
+    let mode = 'proxy';
 
-    console.log('Interfaces directory:', getInterfacesDir());
-    mcpServer = startMcp(PORT);
-
-    app.on('activate', function () {
-        // On macOS it's common to re-create a window when the dock icon is clicked
-        if (BrowserWindow.getAllWindows().length === 0) createMainWindow();
+    const net = require('net');
+    const server = net.createServer();
+    server.on('error', (err: any) => {
+        if (err.code === 'EADDRINUSE') {
+            mode = 'proxy';
+        }
     });
+    server.listen(PORT, () => {
+        server.close();
+        mcpServer = startMcp(PORT);
+        mode = 'host';
+
+        setupProtocolHandlers();
+        installMenuTrayIcon();
+        unpackScripts();
+        detectClaudeInstallation();
+
+        console.error('Interfaces directory:', getInterfacesDir());
+
+        app.on('activate', function () {
+            // On macOS it's common to re-create a window when the dock icon is clicked
+            if (BrowserWindow.getAllWindows().length === 0) createMainWindow();
+        });
+        app.on('will-quit', () => {
+            if (mcpServer) {
+                mcpServer.server.close();
+            }
+
+            //Display a modal alert
+            dialog.showMessageBox({
+                type: 'info',
+                title: 'PopUI',
+                message: 'PopUI is closing',
+                detail: 'Any active chat sessions will be disconnected.\nRestart your chat host to reconnect.',
+                buttons: ['Bye'],
+                defaultId: 0
+            });
+
+            //Kill all other PopUI processes
+            require('child_process').execSync('pkill -f "PopUI"');
+        });
+    });
+
+    const url = 'http://localhost:3001/sse';
+    const callbackPort = 3334;
+    const clean = false;
+
+    //$(mdfind "kMDItemCFBundleIdentifier == 'com.kelnishi.popui'")"/Contents/MacOS/PopUI" --sse
+    console.error(`Running proxy for ${url} with callback port ${callbackPort} with clean mode ${clean}`);
+    runProxy(url, callbackPort, clean)
+        .then(() => {
+            return;
+        })
+        .catch(err => {
+            console.error('Proxy error:', err);
+            process.exit(1);
+        });
+
 });
 
 // Quit when all windows are closed, except on macOS
@@ -384,7 +466,7 @@ app.on('quit', () => {
 });
 
 export async function injectWindow(name: string, json: string) {
-    console.log(`Injecting window: ${name}`);
+    console.error(`Injecting window: ${name}`);
 
     const win = windows.get(name);
     if (!win) {
@@ -392,21 +474,21 @@ export async function injectWindow(name: string, json: string) {
         return null;
     }
 
-    console.log(`Found window: ${name}`);
-    await win.webContents.executeJavaScript(`window.setState(${json})`);
+    console.error(`Found window: ${name}`);
+    await win.webContents.executeJavaScript(`window.dynamicComponent.setState(${json})`);
 
     return JSON.stringify(json, null, 2);
 }
 
 export async function readWindow(name: string) {
-    console.log(`Reading window: ${name}`);
+    console.error(`Reading window: ${name}`);
 
     const win = windows.get(name);
     if (!win) {
         const filename = path.join(getInterfacesDir(), `${name}.tsx`);
 
         if (fs.existsSync(filename)) {
-            console.log(`Found window file: ${name}`);
+            console.error(`Found window file: ${name}`);
             const newWin = await openFile(filename);
 
             if (!newWin) {
@@ -414,7 +496,7 @@ export async function readWindow(name: string) {
                 return null;
             }
 
-            const state = await newWin.webContents.executeJavaScript('window.getState()');
+            const state = await newWin.webContents.executeJavaScript('window.dynamicComponent.getState()');
             return JSON.stringify(state, null, 2);
         }
 
@@ -422,9 +504,9 @@ export async function readWindow(name: string) {
         return null;
     }
 
-    console.log(`Found window: ${name}`);
+    console.error(`Found window: ${name}`);
     // Execute the getState method on the component instance
-    const state = await win.webContents.executeJavaScript('window.getState()');
+    const state = await win.webContents.executeJavaScript('window.dynamicComponent.getState()');
 
     return JSON.stringify(state, null, 2);
 }
@@ -436,12 +518,12 @@ export async function closeWindow(name: string) {
         windows.delete(name);
     }
 
-    console.log(`Window closed: ${name}`);
+    console.error(`Window closed: ${name}`);
     return name;
 }
 
 export async function describeWindow(name: string) {
-    console.log(`Describing window: ${name}`);
+    console.error(`Describing window: ${name}`);
 
     const win = windows.get(name);
     if (!win) {
@@ -449,7 +531,7 @@ export async function describeWindow(name: string) {
         return null;
     }
 
-    console.log(`Found window: ${name}`);
+    console.error(`Found window: ${name}`);
     // Execute the describeState method on the component instance
     const state = await win.webContents.executeJavaScript('window.describeState()');
 
@@ -473,7 +555,7 @@ export function showFile(selectedFile: string) {
         return;
     }
     const filepath = path.resolve(selectedFile);
-    console.log('Revealing file:', filepath);
+    console.error('Revealing file:', filepath);
     // Reveal the file in the system's file manager
     shell.showItemInFolder(filepath);
 }
@@ -525,7 +607,7 @@ ipcMain.handle('show-file', async (_, selectedFile: string) => {
 });
 
 ipcMain.handle('send-to-host', async (_, message: string) => {
-    console.log("Sending message to host:", message);
+    console.error("Sending message to host:", message);
     return await sendToClaude(message);
 });
 
@@ -535,11 +617,11 @@ ipcMain.handle('server-request', async (_, endpoint, data) => {
         // Base URL for server requests
         const baseUrl = `http://localhost:${PORT}`;
 
-        console.log(`Making request to ${baseUrl}${endpoint}`, data ? 'with data' : 'without data');
+        console.error(`Making request to ${baseUrl}${endpoint}`, data ? 'with data' : 'without data');
 
         // Handle different HTTP methods
         if (data && endpoint === '/upload') {
-            console.log('Handling file upload request');
+            console.error('Handling file upload request');
 
             // For file uploads, make a POST request with the data
             const response = await fetch(`${baseUrl}${endpoint}`, {
@@ -557,7 +639,7 @@ ipcMain.handle('server-request', async (_, endpoint, data) => {
             }
 
             const result = await response.json();
-            console.log('Upload response:', result);
+            console.error('Upload response:', result);
             return result;
         } else {
             // For other endpoints, make a GET request
@@ -570,7 +652,7 @@ ipcMain.handle('server-request', async (_, endpoint, data) => {
             }
 
             const result = await response.json();
-            // console.log('API response:', result);
+            // console.error('API response:', result);
             return result;
         }
     } catch (error) {

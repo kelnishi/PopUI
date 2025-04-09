@@ -63,11 +63,10 @@ export function startMcp(port: number): SseServer {
             ),
             tsx: z.string().optional().describe(
                 "A react component to display in the electron BrowserWindow.\n" +
-                "This component must be compatible with dynamic loading via babel.\n" +
                 "This component is a single reference and must be entirely self contained.\n" +
-                "This component must set a function 'window.getState()' to get the current state of the user interface as a detailed json model object.\n" +
-                "This component must set a function 'window.setState(json)' to set the current state of the user interface.\n" +
-                "This component must set a function 'window.describeState()' to get the schema of the json model object.\n" +
+                "The component should keep its state as a json model object and must have functions getState() and setState(json) to retrieve or inject (respectively) the visualized state.\n" +
+                "The component should have a function describeState() to return the json schema of the state model.\n" +
+                "The component should be a forwardRef so that useImperitiveHandle can expose getState, setState, and describeState.\n" +
                 "This component may send chat messages to the host with 'window.api.sendToHost(message)'.\n" +
                 "- Use this method with submit/confirm buttons and action elements to prompt the host on behalf of the user.\n" +
                 "- Do not use this method for interactive elements within the user interface; it should only be used to send user intent.\n" +
@@ -276,7 +275,7 @@ export function startMcp(port: number): SseServer {
         }, 15000);
 
         req.on('close', () => {
-            console.log(`Client Connection ${transport.sessionId} closed`);
+            console.error(`Client Connection ${transport.sessionId} closed`);
             clearInterval(heartbeat);
             transport.close();
             transports.delete(transport.sessionId);
@@ -284,7 +283,7 @@ export function startMcp(port: number): SseServer {
 
         // Handle connection close
         res.on('close', () => {
-            console.log(`Connection ${transport.sessionId} closed`);
+            console.error(`Connection ${transport.sessionId} closed`);
             clearInterval(heartbeat);
             transports.delete(transport.sessionId);
         });
@@ -294,13 +293,13 @@ export function startMcp(port: number): SseServer {
         await mcpServer.connect(transport);
 
         // Log the session ID for debugging
-        console.log(`New SSE connection established with session ID: ${transport.sessionId}`);
+        console.error(`New SSE connection established with session ID: ${transport.sessionId}`);
     });
 
     app.post("/messages", async (req, res) => {
         try {
             // Debug logging to see what's being received
-            console.log("Received POST to /messages", req.body);
+            console.error("Received POST to /messages", req.body);
 
             // Check if we have any connections first
             if (transports.size === 0) {
@@ -313,17 +312,17 @@ export function startMcp(port: number): SseServer {
             // 1. Check if it's in the body
             if (req.body && req.body.sessionId) {
                 sessionId = req.body.sessionId;
-                console.log('Body sessionId:', sessionId);
+                console.error('Body sessionId:', sessionId);
             }
             // 2. Check if it's in a custom header
             else if (req.headers['x-session-id']) {
                 sessionId = req.headers['x-session-id'];
-                console.log('Header sessionId:', sessionId);
+                console.error('Header sessionId:', sessionId);
             }
             // 3. Check if it's in the URL query parameters
             else if (req.query.sessionId) {
                 sessionId = req.query.sessionId;
-                console.log('Query sessionId:', sessionId);
+                console.error('Query sessionId:', sessionId);
             }
 
             const parsedBody = req.body;
@@ -331,11 +330,11 @@ export function startMcp(port: number): SseServer {
             // If we found a sessionId and it exists in our connections
             if (sessionId) {
                 if (transports.has(sessionId)) {
-                    console.log(`Using specified session ID: ${sessionId}`);
+                    console.error(`Using specified session ID: ${sessionId}`);
                     const transport: SSEServerTransport = transports.get(sessionId);
                     await transport.handlePostMessage(req, res, parsedBody);
                 } else {
-                    console.log(`Session ID ${sessionId} not found in active connections. Sending 400.`);
+                    console.error(`Session ID ${sessionId} not found in active connections. Sending 400.`);
                     return res.status(400).send("SSE connection not active. Please reconnect.");
                 }
             }
@@ -362,7 +361,7 @@ export function startMcp(port: number): SseServer {
 
     // Start the server
     const serverInstance: Server = app.listen(port, () => {
-        console.log(`Server is running at http://localhost:${port}`);
+        console.error(`Server is running at http://localhost:${port}`);
     });
 
     return {

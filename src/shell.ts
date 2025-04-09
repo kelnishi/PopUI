@@ -35,7 +35,7 @@ interface ProcessCloseData {
  * @returns A promise that resolves with the command output
  */
 function executeCommand(command: string): Promise<string> {
-  console.log("Executing command", command);
+  console.error("Executing command", command);
   return new Promise<string>((resolve, reject) => {
     exec(command, (error: ExecException | null, stdout: string, stderr: string) => {
       if (error) {
@@ -44,9 +44,9 @@ function executeCommand(command: string): Promise<string> {
         return;
       }
       if (stderr) {
-        console.warn(`Warning: ${stderr}`);
+        console.error(`Warning: ${stderr}`);
       }
-      console.log('Stdout output:', stdout);
+      console.error('Stdout output:', stdout);
       resolve(stdout);
     });
   });

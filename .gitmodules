@@ -1,0 +1,3 @@
+[submodule "mcp-remote"]
+	path = mcp-remote
+	url = git@github.com:kelnishi/mcp-remote.git

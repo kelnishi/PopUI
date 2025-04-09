@@ -20,6 +20,9 @@ const config: ForgeConfig = {
       entitlements: './entitlements.plist',
       'entitlements-inherit': './entitlements.plist'
     } as any,
+    extendInfo: {
+      LSUIElement: true,
+    }
   },
   rebuildConfig: {},
   makers: [

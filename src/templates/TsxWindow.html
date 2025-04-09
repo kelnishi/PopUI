@@ -255,11 +255,12 @@ async function renderDynamicComponent() {
     if (rootElement) {
       const root = ReactDOM.createRoot(rootElement);
 
-      // Check if Component is a class (can accept refs) or function component
+      // Check if Component is a class or forwardRef component
       const isClassComponent = Component.prototype && Component.prototype.isReactComponent;
+      const isForwardRef = Component.$$typeof === Symbol.for('react.forward_ref');
 
-      if (isClassComponent) {
-        // For class components, we can use refs
+      if (isClassComponent || isForwardRef) {
+        // For class components and forwardRef components, we can use refs
         root.render(
           React.createElement('div', 
             { id: 'dynamic-component-container' },
@@ -271,7 +272,7 @@ async function renderDynamicComponent() {
           )
         );
       } else {
-        // For function components, don't use refs
+        // For regular function components, don't use refs
         const componentElement = React.createElement(Component, {});
         window.dynamicComponent = componentElement;
         root.render(

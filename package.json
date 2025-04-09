@@ -12,13 +12,15 @@
     "src/templates/*"
   ],
   "scripts": {
+    "build:remote": "cd mcp-remote && npm run build && npm link",
     "build:css": "npx @tailwindcss/cli -i ./src/styles/tailwind.css -o ./src/styles/output.css",
     "watch:css": "npx @tailwindcss/cli -i ./src/styles/tailwind.css -o ./src/styles/output.css --watch",
-    "start": "npm run build:css && electron-forge start",
-    "package": "npm run build:css && electron-forge package",
-    "make": "npm run build:css && electron-forge make"
+    "start": "npm run build:remote && npm run build:css && electron-forge start",
+    "package": "npm run build:remote && npm run build:css && electron-forge package",
+    "make": "npm run build:remote && npm run build:css && electron-forge make"
   },
   "dependencies": {
+    "mcp-remote": "file: ./mcp-remote",
     "@babel/standalone": "^7.26.10",
     "@modelcontextprotocol/sdk": "^1.0.0",
     "@radix-ui/react-alert-dialog": "^1.1.6",
