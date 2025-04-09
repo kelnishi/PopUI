@@ -22,6 +22,11 @@ let dropdownWindow: BrowserWindow | null;
 
 let windows = new Map<string, BrowserWindow>();
 
+let isQuitting = false;
+app.on('before-quit', () => {
+    isQuitting = true;
+});
+
 function createMainWindow() {
     if (mainWindow) {
         mainWindow.show();
@@ -43,8 +48,11 @@ function createMainWindow() {
     mainWindow.loadFile(path.join(__dirname, '../renderer/view/index.html'));
 
     mainWindow.on('close', (event) => {
-        event.preventDefault();
-        mainWindow?.hide();
+        if (isQuitting) {
+            event.preventDefault();
+            mainWindow?.hide();
+            return;
+        }
     });
     
     // Open DevTools in development mode
