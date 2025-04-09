@@ -16,6 +16,10 @@ if (contextBridge && ipcRenderer) {
       return ipcRenderer.invoke('link-external', url);  
     },
     
+    listFiles: () => {
+      return ipcRenderer.invoke('list-files');
+    },
+    
     openFile: (filename: string) => {
       console.log(`Preload: openFile ${filename}`);
       return ipcRenderer.invoke('open-file', filename);
@@ -25,10 +29,24 @@ if (contextBridge && ipcRenderer) {
       console.log(`Preload: showFile ${filename}`);
       return ipcRenderer.invoke('show-file', filename);
     },
+    
+    deleteFile: (filename: string) => {
+      console.log(`Preload: deleteFile ${filename}`);
+      return ipcRenderer.invoke('delete-file', filename);
+    },
 
     sendToHost: (message: string) => {
       return ipcRenderer.invoke('send-to-host', message);
+    },
+    
+    getPreference: (key: string) => {
+      return ipcRenderer.invoke('get-pref', key);
+    },
+    
+    setPreference: (key: string, value: string) => {
+      return ipcRenderer.invoke('set-pref', key, value);
     }
+    
   });
 } else {
   console.error('Electron APIs not available in preload script');

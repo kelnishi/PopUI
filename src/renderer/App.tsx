@@ -8,8 +8,13 @@ declare global {
         api: {
             serverRequest: (endpoint: string, data?: any) => Promise<any>;
             linkExternal: (windowName: string) => Promise<any>;
+            listFiles: () => Promise<any>;
             openFile: (windowName: string) => Promise<any>;
             showFile: (windowName: string) => Promise<any>;
+            deleteFile: (windowName: string) => Promise<any>;
+            sendToHost: (message: string) => Promise<any>;
+            getPreference: (key: string) => Promise<string>;
+            setPreference: (key: string, value: string) => Promise<any>;
         };
     }
 }

@@ -4,6 +4,7 @@ import yaml from 'js-yaml';
 
 interface AppPreferences {
   toolCalls: number;
+  autoSend: boolean;
 }
 
 const preferences = new Store<AppPreferences>({
@@ -14,6 +15,7 @@ const preferences = new Store<AppPreferences>({
   deserialize: yaml.load as (data: string) => AppPreferences,
   
   defaults: {
+    autoSend: true,
     toolCalls: 0
   }
 });

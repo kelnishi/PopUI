@@ -1,53 +1,16 @@
 import * as React from "react"
-import { View, BrainCircuit, Trash, ChevronDown, ChevronRight } from "lucide-react"
+import { View, BrainCircuit, Trash, ChevronDown, ChevronRight, FileSearch} from "lucide-react"
 import * as AlertDialog from "@radix-ui/react-alert-dialog"
 import * as Collapsible from "@radix-ui/react-collapsible"
 
 type File = {
-  id: string
-  name: string
-  size: string
-  metadata: Record<string, any> // JSON metadata
+  name: string,
+  path: string,
+  schema: object
 }
 
-const mockFiles: File[] = [
-  {
-    id: "1",
-    name: "document.pdf",
-    size: "2.5 MB",
-    metadata: {
-      createdAt: "2023-04-15T10:30:00Z",
-      author: "John Doe",
-      pages: 42,
-      keywords: ["report", "quarterly", "finance"],
-    },
-  },
-  {
-    id: "2",
-    name: "image.jpg",
-    size: "1.8 MB",
-    metadata: {
-      createdAt: "2023-05-20T14:15:00Z",
-      dimensions: "1920x1080",
-      camera: "Canon EOS R5",
-      location: { lat: 40.7128, lng: -74.006 },
-    },
-  },
-  {
-    id: "3",
-    name: "spreadsheet.xlsx",
-    size: "3.2 MB",
-    metadata: {
-      createdAt: "2023-06-10T09:45:00Z",
-      sheets: ["Q1", "Q2", "Summary"],
-      lastModifiedBy: "Jane Smith",
-      cells: 1024,
-    },
-  },
-]
-
 export function FileList() {
-  const [files, setFiles] = React.useState<File[]>(mockFiles)
+  const [files, setFiles] = React.useState<File[]>([])
   const [openItems, setOpenItems] = React.useState<Record<string, boolean>>({})
 
   const toggleItem = (id: string) => {
@@ -56,24 +19,41 @@ export function FileList() {
       [id]: !prev[id],
     }))
   }
+  
+  React.useEffect(() => {
+    window.api.listFiles().then((files) => {
+      setFiles(files)
+    }).catch((err) => {
+      console.error("Error fetching files:", err)
+    })
+  }, [files]);
 
   const handleShow = (file: File) => {
     // Implement file preview logic here
-    console.log("Showing file:", file.name)
+    window.api.openFile(file.path);
   }
 
   const handleOpen = (file: File) => {
     // Implement file opening logic here
-    console.log("Opening file:", file.name)
+    window.api.sendToHost(`Use the PopUI tool to <show> the '${file.name}' user interface, <describe> it, and <get> its state.`);
+  }
+  
+  const handleReveal = (file: File) => {
+    // Implement file reveal logic here
+    window.api.showFile(file.path);
   }
 
-  const handleDelete = (fileId: string) => {
-    setFiles(files.filter((file) => file.id !== fileId))
-    // Also clean up the openItems state
-    setOpenItems((prev) => {
-      const newState = { ...prev }
-      delete newState[fileId]
-      return newState
+  const handleDelete = (file: File) => {
+    window.api.deleteFile(file.path).then((deletedFile) => {
+      setFiles(files.filter((file) => file.name !== file.name))
+      // Also clean up the openItems state
+      setOpenItems((prev) => {
+        const newState = { ...prev }
+        delete newState[file.name]
+        return newState
+      })
+    }).catch((err) => {
+      console.error("Error deleting file:", err)
     })
   }
 
@@ -86,26 +66,23 @@ export function FileList() {
               Name
             </th>
             <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-              Size
-            </th>
-            <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
               Actions
             </th>
           </tr>
         </thead>
         <tbody className="bg-white divide-y divide-gray-200">
           {files.map((file) => (
-            <React.Fragment key={file.id}>
+            <React.Fragment key={file.name}>
               <tr>
                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                   <Collapsible.Root
-                    open={openItems[file.id] || false}
-                    onOpenChange={() => toggleItem(file.id)}
+                    open={openItems[file.name] || false}
+                    onOpenChange={() => toggleItem(file.name)}
                     className="flex items-center"
                   >
                     <Collapsible.Trigger asChild>
                       <button className="flex items-center focus:outline-none mr-2">
-                        {openItems[file.id] ? (
+                        {openItems[file.name] ? (
                           <ChevronDown className="h-4 w-4 text-gray-500" />
                         ) : (
                           <ChevronRight className="h-4 w-4 text-gray-500" />
@@ -115,32 +92,46 @@ export function FileList() {
                     {file.name}
                   </Collapsible.Root>
                 </td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{file.size}</td>
                 <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                   <div className="flex space-x-2">
                     <button
                       onClick={() => handleShow(file)}
                       className="p-1 rounded-md text-gray-400 hover:text-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      aria-label="Preview User Interface"
+                      title="Preview User Interface"
                     >
                       <View className="h-4 w-4" />
                     </button>
                     <button
                       onClick={() => handleOpen(file)}
                       className="p-1 rounded-md text-gray-400 hover:text-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      aria-label="Load User Interface"
+                      title="Load User Interface in Host"
                     >
                       <BrainCircuit className="h-4 w-4" />
                       
                     </button>
-                    <DeleteFileDialog file={file} onDelete={() => handleDelete(file.id)} />
+                    <button
+                      onClick={() => handleReveal(file)}
+                      className="p-1 rounded-md text-gray-400 hover:text-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      aria-label="Reveal File"
+                      title="Reveal File in Directory"
+                    >
+                      <FileSearch className="h-4 w-4" />
+                    </button>
+                    <DeleteFileDialog 
+                        file={file}
+                        onDelete={() => handleDelete(file)}
+                    />
                   </div>
                 </td>
               </tr>
-              {openItems[file.id] && (
+              {openItems[file.name] && (
                 <tr className="bg-gray-50">
                   <td colSpan={3} className="px-6 py-4">
                     <div className="text-sm text-gray-900">
                       <pre className="bg-gray-100 p-3 rounded-md overflow-auto max-h-60">
-                        {JSON.stringify(file.metadata, null, 2)}
+                        {JSON.stringify(file.schema, null, 2)}
                       </pre>
                     </div>
                   </td>
@@ -163,7 +154,10 @@ function DeleteFileDialog({ file, onDelete }: DeleteFileDialogProps) {
   return (
     <AlertDialog.Root>
       <AlertDialog.Trigger asChild>
-        <button className="p-1 rounded-md text-gray-400 hover:text-red-500 focus:outline-none focus:ring-2 focus:ring-red-500">
+        <button 
+            className="p-1 rounded-md text-gray-400 hover:text-red-500 focus:outline-none focus:ring-2 focus:ring-red-500"
+            aria-label="Delete File"
+            title="Delete File">
           <Trash className="h-4 w-4" />
         </button>
       </AlertDialog.Trigger>

@@ -23,6 +23,8 @@ function run(argv) {
 	// Set the value of the first text field in the first window
 	// (note: index 0 is the first element)
 	var textToSend = argv[0];
+	
+	var autoSend = argv[1] === '--auto-send';
 
 	// Try to find the button for sending messages with better error handling
 	var mainWindow = targetApp.windows[0];
@@ -34,6 +36,10 @@ function run(argv) {
 	})
 
 	systemEvents.keystroke(textToSend);
+
+	if (!autoSend) {
+		return;
+	}
 
 	if (sendButton) {
 		console.log(`Clicking send button: ${sendButton.description()}`);

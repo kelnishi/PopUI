@@ -55,7 +55,8 @@ export function startMcp(port: number): SseServer {
                 "The mode of operation for the user interface. Use:" +
                 "'show' to show a user interface (create/update by passing tsx or show an existing)\n" +
                 "'get' to read the current model state of a user interface\n" +
-                "'set' to inject a model state into a user interface\n" +
+                "'set' to inject a model state into a user interface. Do not use 'set' when the user tells you about an event.\n" +
+                "'describe' to get the json schema of the state model\n" +
                 "'list' to list existing user interfaces\n"
             ),
             json: z.string().optional().describe(

@@ -3,6 +3,8 @@ import { platform } from 'os';
 import path from "path";
 import {app} from "electron";
 
+import preferences from './preferences';
+
 /**
  * Result of a command execution
  */
@@ -82,9 +84,11 @@ async function sendToClaude(message: string): Promise<CommandResult> {
     // Escape the message to prevent shell injection
     const escapedMessage = message.replace(/'/g, "'\\''");
     
+    const autoSend = preferences.get('autoSend');
+    
     // Build and execute the osascript command
     const scriptPath = path.join(app.getPath('userData'), 'scripts', 'sendtoclaude.jxa.js');
-    const command = `osascript -l JavaScript "${scriptPath}" '${escapedMessage}'`;
+    const command = `osascript -l JavaScript "${scriptPath}" '${escapedMessage}' ${autoSend?'--auto-send':''}`;
     const output = await executeCommand(command);
     
     return {

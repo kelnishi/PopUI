@@ -10,6 +10,8 @@ import MenuItemConstructorOptions = Electron.MenuItemConstructorOptions;
 import {runProxy} from 'mcp-remote/dist/proxy';
 import * as process from "node:process";
 
+import preferences from './preferences';
+
 let mcpServer: SseServer | null;
 
 let mainWindow: BrowserWindow | null = null;
@@ -21,6 +23,11 @@ let dropdownWindow: BrowserWindow | null;
 let windows = new Map<string, BrowserWindow>();
 
 function createMainWindow() {
+    if (mainWindow) {
+        mainWindow.show();
+        return;
+    }
+    
     // Create the browser window
     mainWindow = new BrowserWindow({
         width: 800,
@@ -35,6 +42,11 @@ function createMainWindow() {
     // Load the index.html from the renderer folder
     mainWindow.loadFile(path.join(__dirname, '../renderer/view/index.html'));
 
+    mainWindow.on('close', (event) => {
+        event.preventDefault();
+        mainWindow?.hide();
+    });
+    
     // Open DevTools in development mode
     if (process.env.NODE_ENV === 'development') {
         mainWindow.webContents.openDevTools();
@@ -596,6 +608,17 @@ ipcMain.handle('link-external', async (_, url) => {
     return false;
 });
 
+ipcMain.handle('list-files', async () => {
+    const files = listFiles();
+    return files.filter(file => file.endsWith('.tsx')).map(file => {
+        return {
+            name: file.replace('.tsx', ''),
+            path: path.join(getInterfacesDir(), file),
+            schema: {}
+        };
+    });
+});
+
 ipcMain.handle('open-file', async (_, selectedFile: string) => {
     openFile(selectedFile);
     return selectedFile;
@@ -606,9 +629,31 @@ ipcMain.handle('show-file', async (_, selectedFile: string) => {
     return selectedFile;
 });
 
+ipcMain.handle('delete-file', async (_, selectedFile: string) => {
+    const uploadsDir = getInterfacesDir();
+    if (!selectedFile.startsWith(uploadsDir)) {
+        console.warn('Selected file is not in uploadsDir');
+        return;
+    }
+    const filepath = path.resolve(selectedFile);
+    console.error('Deleting file:', filepath);
+    fs.unlinkSync(filepath);
+    return selectedFile;
+});
+
 ipcMain.handle('send-to-host', async (_, message: string) => {
     console.error("Sending message to host:", message);
     return await sendToClaude(message);
+});
+
+ipcMain.handle('get-pref', async (_, key: string) => {
+    return preferences.get(key) as string;
+});
+
+ipcMain.handle('set-pref', async (_, key: string, value: string) => {
+    const bool = value === 'true';
+    preferences.set(key, bool);
+    return bool;
 });
 
 // Handle IPC requests from renderer to server
