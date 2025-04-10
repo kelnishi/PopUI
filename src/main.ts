@@ -7,7 +7,7 @@ import {reloadClaude, sendToClaude} from './shell';
 import * as os from "node:os";
 import MenuItemConstructorOptions = Electron.MenuItemConstructorOptions;
 
-import {runProxy} from 'mcp-remote/dist/proxy';
+import {runProxy} from '@/mcp-remote/src/proxy';
 import * as process from "node:process";
 
 import preferences from './preferences';
@@ -409,7 +409,7 @@ function detectClaudeInstallation() {
 }
 
 
-app.whenReady().then(() => {
+app.whenReady().then(async() => {
 
     let mode = 'proxy';
 
@@ -464,15 +464,13 @@ app.whenReady().then(() => {
 
     //$(mdfind "kMDItemCFBundleIdentifier == 'com.kelnishi.popui'")"/Contents/MacOS/PopUI" --sse
     console.error(`Running proxy for ${url} with callback port ${callbackPort} with clean mode ${clean}`);
-    runProxy(url, callbackPort, clean)
-        .then(() => {
-            return;
-        })
-        .catch(err => {
-            console.error('Proxy error:', err);
-            process.exit(1);
-        });
-
+    try {
+        await runProxy(url, callbackPort, clean);
+    }
+    catch (error) {
+        console.error('Proxy error:', error);
+        process.exit(1);
+    }
 });
 
 export async function injectWindow(name: string, json: string) {
