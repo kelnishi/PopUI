@@ -17,6 +17,9 @@ const config: ForgeConfig = {
     appCategoryType: 'public.app-category.productivity',
     appCopyright: 'Copyright © 2025 Kelvin Nishikawa',
     osxSign: {},
+    osxNotarize: {
+      keychainProfile: 'popui-app-password-profile'
+    },
     extendInfo: {
       LSUIElement: true,
     }
