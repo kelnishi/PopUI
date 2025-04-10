@@ -1,7 +1,7 @@
 {
   "name": "PopUI",
   "productName": "PopUI",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "PopUI is a companion desktop app that gives Claude Desktop collaborative ux tools.",
   "author": {
     "name": "Kelvin Nishikawa",
