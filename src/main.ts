@@ -48,11 +48,8 @@ function createMainWindow() {
     mainWindow.loadFile(path.join(__dirname, '../renderer/view/index.html'));
 
     mainWindow.on('close', (event) => {
-        if (isQuitting) {
-            event.preventDefault();
-            mainWindow?.hide();
-            return;
-        }
+        event.preventDefault();
+        mainWindow?.hide();
     });
     
     // Open DevTools in development mode
@@ -243,7 +240,9 @@ function installMenuTrayIcon() {
                 submenu: recentFilesMenu
             },
             {type: 'separator'},
-            {label: 'Quit', click: () => app.quit()}
+            {label: 'Quit', click: () => {
+                app.quit();
+            }}
         ];
 
         // Set the context menu
@@ -437,11 +436,7 @@ app.whenReady().then(() => {
             // On macOS it's common to re-create a window when the dock icon is clicked
             if (BrowserWindow.getAllWindows().length === 0) createMainWindow();
         });
-        app.on('will-quit', () => {
-            if (mcpServer) {
-                mcpServer.server.close();
-            }
-
+        app.on('before-quit', () => {
             //Display a modal alert
             dialog.showMessageBox({
                 type: 'info',
@@ -450,10 +445,16 @@ app.whenReady().then(() => {
                 detail: 'Any active chat sessions will be disconnected.\nRestart your chat host to reconnect.',
                 buttons: ['Bye'],
                 defaultId: 0
+            }).then(() => {
+                //Kill all other PopUI processes
+                require('child_process').execSync('pkill -f "PopUI"');
+                app.exit(0);
             });
-
-            //Kill all other PopUI processes
-            require('child_process').execSync('pkill -f "PopUI"');
+        });
+        app.on('will-quit', () => {
+            if (mcpServer) {
+                mcpServer.server.close();
+            }
         });
     });
 
@@ -472,17 +473,6 @@ app.whenReady().then(() => {
             process.exit(1);
         });
 
-});
-
-// Quit when all windows are closed, except on macOS
-app.on('window-all-closed', function () {
-    if (process.platform !== 'darwin') app.quit();
-});
-
-app.on('quit', () => {
-    if (mcpServer) {
-        mcpServer.server.close();
-    }
 });
 
 export async function injectWindow(name: string, json: string) {
