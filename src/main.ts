@@ -80,6 +80,7 @@ function createNewWindowWithTSX(filenameWithoutExt: string, tsxFilePath: string)
 
     const tempHtmlPath = path.join(app.getPath('temp'), filenameWithoutExt + '.html');
     fs.writeFileSync(tempHtmlPath, htmlContent, 'utf-8');
+    console.error('Created temp file:', tempHtmlPath);
 
     const newWin = new BrowserWindow({
         width: 800,
@@ -92,11 +93,17 @@ function createNewWindowWithTSX(filenameWithoutExt: string, tsxFilePath: string)
     });
 
     newWin.webContents.on('did-finish-load', async () => {
-        // Measure the maximum width and height of the document
-        const {width, height} = await newWin.webContents.executeJavaScript(`
+        
+        try {
+            // Measure the maximum width and height of the document
+            const {width, height} = await newWin.webContents.executeJavaScript(`
 (() => {
     // Wait for the component to be rendered
-    const rootElement = document.getElementById('dynamic-component-container').children[0] || document.getElementById('root') || document.body;
+    const rootElement = document.getElementById('dynamic-component-container')?.children[0] || document.getElementById('root') || document.body;
+    
+    if (!rootElement) {
+        return {width: 0, height: 0};
+    }
     
     // Get the actual rendered component's size
     const rect = rootElement.getBoundingClientRect();
@@ -106,13 +113,29 @@ function createNewWindowWithTSX(filenameWithoutExt: string, tsxFilePath: string)
         height: Math.ceil(rect.height)
     };
 })()`
-        );
+            );
 
-        // Update the window's content size
-        newWin.setContentSize(width, height);
+            if (width === 0 || height === 0) {
+                console.error('Invalid width or height:', width, height);
+                return;
+            }
+            // Update the window's content size
+            newWin.setContentSize(width, height);
+        }
+        catch (e) {
+            console.error(e);
+        }
+    });
+    
+    newWin.webContents.on('console-message', (event, level, message, line, sourceId) => {
+        console.error(level, message, line, sourceId);
     });
 
-    newWin.loadFile(tempHtmlPath);
+    try {
+        newWin.loadFile(tempHtmlPath);
+    } catch (e) {
+        console.error(e);
+    }
 
     return newWin;
 }
